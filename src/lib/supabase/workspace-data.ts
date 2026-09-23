@@ -111,6 +111,9 @@ export type Programme = {
   degreeLevel: string;
   applicationUrl: string;
   academicYear: string;
+  officialCode: string;
+  degreeClass: string;
+  cataloguedAt: string | null;
   verifiedAt: string | null;
   notes: string;
   rules: ProgrammeRules;
@@ -363,6 +366,12 @@ function mapProgramme(row: Record<string, unknown>): Programme {
     degreeLevel: String(row.degree_level ?? "master"),
     applicationUrl: String(row.application_url ?? ""),
     academicYear: String(row.academic_year ?? ""),
+    officialCode: String(row.official_programme_code ?? ""),
+    degreeClass: String(row.degree_class ?? ""),
+    cataloguedAt:
+      typeof row.catalogue_checked_at === "string"
+        ? row.catalogue_checked_at
+        : null,
     verifiedAt,
     notes: String(row.verification_notes ?? ""),
     rules: normalizeRules(row.requirements),
@@ -746,7 +755,12 @@ function documentType(file: File) {
 }
 
 function documentMimeType(file: File) {
-  if (file.type === "application/pdf" || file.type === "image/jpeg" || file.type === "image/png") return file.type;
+  if (
+    file.type === "application/pdf" ||
+    file.type === "image/jpeg" ||
+    file.type === "image/png"
+  )
+    return file.type;
   const extension = file.name.toLowerCase().split(".").pop();
   if (extension === "pdf") return "application/pdf";
   if (extension === "jpg" || extension === "jpeg") return "image/jpeg";

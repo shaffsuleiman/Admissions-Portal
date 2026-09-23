@@ -530,8 +530,8 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </p>
           {configured ? (
             <p className="demo-notice connected">
-              <ShieldCheck size={13} /> Secure sign-in · connected to your SHAFFMINNA
-              workspace
+              <ShieldCheck size={13} /> Secure sign-in · connected to your
+              SHAFFMINNA workspace
             </p>
           ) : (
             <p className="demo-notice">
@@ -2035,11 +2035,23 @@ function ProgrammesView({
   const [catalogue, setCatalogue] = useState<"programmes" | "universities">(
     "programmes",
   );
-  const visible = programmes.filter((programme) =>
-    `${programme.programme} ${programme.university} ${programme.city}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  const [levelFilter, setLevelFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const visible = programmes.filter((programme) => {
+    const matchesQuery =
+      `${programme.programme} ${programme.university} ${programme.city} ${programme.degreeClass}`
+        .toLowerCase()
+        .includes(query.toLowerCase());
+    const level = programme.degreeLevel.toLowerCase();
+    const matchesLevel =
+      levelFilter === "all" ||
+      (levelFilter === "bachelor" && level.includes("bachelor")) ||
+      (levelFilter === "master" && level === "master") ||
+      (levelFilter === "single-cycle" && level.includes("single"));
+    const matchesStatus =
+      statusFilter === "all" || programme.status === statusFilter;
+    return matchesQuery && matchesLevel && matchesStatus;
+  });
   const visibleUniversities = universities.filter((university) =>
     `${university.name} ${university.region} ${university.institutionType}`
       .toLowerCase()
@@ -2306,15 +2318,38 @@ function ProgrammesView({
             </button>
           )}
         </div>
-        <button className="outline-button">
-          <Flag size={15} /> Italy <ChevronDown size={14} />
-        </button>
-        <button className="outline-button">
-          <GraduationCap size={15} /> Master’s <ChevronDown size={14} />
-        </button>
-        <button className="outline-button">
-          <Filter size={15} /> More filters
-        </button>
+        <span className="outline-button static-filter">
+          <Flag size={15} /> Italy
+        </span>
+        <label className="outline-button select-filter">
+          <GraduationCap size={15} />
+          <select
+            value={levelFilter}
+            onChange={(event) => setLevelFilter(event.target.value)}
+            aria-label="Filter programmes by degree level"
+          >
+            <option value="all">All levels</option>
+            <option value="bachelor">Bachelor’s</option>
+            <option value="master">Master’s</option>
+            <option value="single-cycle">Single-cycle</option>
+          </select>
+          <ChevronDown size={14} />
+        </label>
+        <label className="outline-button select-filter">
+          <Filter size={15} />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter programmes by verification status"
+          >
+            <option value="all">All data statuses</option>
+            <option value="verified">Verified</option>
+            <option value="in_review">In review</option>
+            <option value="unverified">Needs verification</option>
+            <option value="stale">Stale</option>
+          </select>
+          <ChevronDown size={14} />
+        </label>
       </div>
       <div
         className={`panel data-table programme-table ${isVerifier ? "verifier" : ""}`}
@@ -2341,6 +2376,10 @@ function ProgrammesView({
                   <strong>{programme.programme}</strong>
                   <small>
                     {programme.university} · {programme.city}
+                  </small>
+                  <small>
+                    {programme.degreeLevel} · {programme.language} · A.Y.{" "}
+                    {programme.academicYear}
                   </small>
                 </span>
               </span>
@@ -3656,11 +3695,21 @@ const formatBytes = (bytes: number) =>
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-const supportedDocumentTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const supportedDocumentTypes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+]);
 const documentMimeType = (file: File) => {
   if (supportedDocumentTypes.has(file.type)) return file.type;
   const extension = file.name.toLowerCase().split(".").pop();
-  return extension === "pdf" ? "application/pdf" : extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "png" ? "image/png" : "";
+  return extension === "pdf"
+    ? "application/pdf"
+    : extension === "jpg" || extension === "jpeg"
+      ? "image/jpeg"
+      : extension === "png"
+        ? "image/png"
+        : "";
 };
 
 function NewStudentWizard({
@@ -3701,9 +3750,13 @@ function NewStudentWizard({
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     const selected = Array.from(list);
-    const rejected = selected.filter((file) => !documentMimeType(file) || file.size > 20 * 1024 * 1024);
+    const rejected = selected.filter(
+      (file) => !documentMimeType(file) || file.size > 20 * 1024 * 1024,
+    );
     if (rejected.length) {
-      setError(`${rejected.map((file) => file.name).join(", ")} ${rejected.length === 1 ? "is" : "are"} not supported. Choose PDF, JPG or PNG files up to 20MB.`);
+      setError(
+        `${rejected.map((file) => file.name).join(", ")} ${rejected.length === 1 ? "is" : "are"} not supported. Choose PDF, JPG or PNG files up to 20MB.`,
+      );
     } else {
       setError("");
     }
