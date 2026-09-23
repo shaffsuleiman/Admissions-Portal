@@ -860,6 +860,61 @@ export async function createStudent(
   return student.id;
 }
 
+/** Permanently deletes a student, their private uploads, and all cascading records. */
+export async function deleteStudent(workspaceId: string, studentId: string) {
+  const supabase = createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user)
+    throw new Error("Your session expired. Please sign in again.");
+
+  const { data: student, error: studentError } = await supabase
+    .from("students")
+    .select("id, first_name, last_name")
+    .eq("id", studentId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (studentError) throw studentError;
+  if (!student) throw new Error("Student not found or you do not have access.");
+
+  const { data: documents, error: documentsError } = await supabase
+    .from("documents")
+    .select("storage_path")
+    .eq("student_id", studentId);
+  if (documentsError) throw documentsError;
+
+  const storagePaths = (documents ?? []).map((document) =>
+    String(document.storage_path),
+  );
+  if (storagePaths.length) {
+    const { error: storageError } = await supabase.storage
+      .from("student-documents")
+      .remove(storagePaths);
+    if (storageError) throw storageError;
+  }
+
+  const { data: deleted, error: deleteError } = await supabase
+    .from("students")
+    .delete()
+    .eq("id", studentId)
+    .eq("workspace_id", workspaceId)
+    .select("id")
+    .maybeSingle();
+  if (deleteError) throw deleteError;
+  if (!deleted) throw new Error("The student could not be deleted.");
+
+  await supabase.from("activity_logs").insert({
+    workspace_id: workspaceId,
+    actor_id: authData.user.id,
+    action: "student.deleted",
+    entity_type: "student",
+    entity_id: studentId,
+    metadata: {
+      name: `${student.first_name} ${student.last_name}`.trim(),
+      documents: storagePaths.length,
+    },
+  });
+}
+
 export async function updateApplicationStage(
   applicationId: string,
   stage: string,

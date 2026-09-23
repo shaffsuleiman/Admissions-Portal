@@ -2831,9 +2831,46 @@ a:focus-visible {
 .student-drawer > footer {
   border-top: 1px solid var(--line);
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   padding: 14px 24px;
+}
+.danger-button {
+  align-items: center;
+  background: #fff5f4;
+  border: 1px solid #f1c4bf;
+  border-radius: 8px;
+  color: #b42318;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 6px;
+  justify-content: center;
+  padding: 9px 13px;
+}
+.danger-button:hover {
+  background: #fee9e7;
+  border-color: #e9aaa3;
+}
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.drawer-delete-button {
+  margin-right: auto;
+}
+.drawer-delete-confirmation {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.drawer-delete-confirmation strong {
+  color: #8d2118;
+  flex: 1;
+  font-size: 11px;
 }
 .drawer-summary {
   background: #f8faf9;

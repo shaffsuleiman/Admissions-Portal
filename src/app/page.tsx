@@ -22,6 +22,7 @@ import { ProgrammeEditor } from "@/components/ProgrammeEditor";
 import { ShortlistReport } from "@/components/ShortlistReport";
 import {
   createApplicationFromMatch,
+  deleteStudent,
   messageOf,
   createStudent,
   draftProgrammeRules,
@@ -81,6 +82,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UploadCloud,
   UserPlus,
   Users,
@@ -955,6 +957,14 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
           onClose={() => setSelectedStudent(null)}
           onReview={() => setReviewStudentId(drawerStudent.id)}
           onReport={() => setReportStudentId(drawerStudent.id)}
+          onDelete={async () => {
+            await deleteStudent(workspace.id, drawerStudent.id);
+            setSelectedStudent(null);
+            setReviewStudentId("");
+            setReportStudentId("");
+            await refresh();
+            notify(`${drawerStudent.name} was permanently deleted`);
+          }}
           onNotify={notify}
         />
       )}
@@ -3395,6 +3405,8 @@ function StudentDrawer({
   onClose,
   onReview,
   onReport,
+  onDelete,
+  onNotify,
 }: {
   student: Student;
   matches: MatchResult[];
@@ -3402,9 +3414,12 @@ function StudentDrawer({
   onClose: () => void;
   onReview: () => void;
   onReport: () => void;
+  onDelete: () => Promise<void>;
   onNotify: (message: string) => void;
 }) {
   const [tab, setTab] = useState("Profile");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const closeButton = useRef<HTMLButtonElement>(null);
   const academic = student.academic;
   const documentStatus: Record<string, string> = {
@@ -3669,20 +3684,58 @@ function StudentDrawer({
           </div>
         )}
         <footer>
-          <button
-            className="secondary-button"
-            disabled={!matches.length}
-            onClick={onReport}
-          >
-            <FileText size={16} /> Shortlist report
-          </button>
-          {tab !== "Matches" && (
-            <button
-              className="primary-button"
-              onClick={() => setTab("Matches")}
-            >
-              <Sparkles size={16} /> View matches
-            </button>
+          {confirmingDelete ? (
+            <div className="drawer-delete-confirmation">
+              <strong>Delete {student.name} and all related data?</strong>
+              <button
+                className="secondary-button"
+                disabled={deleting}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await onDelete();
+                  } catch (error) {
+                    setDeleting(false);
+                    setConfirmingDelete(false);
+                    onNotify(messageOf(error) ?? "Could not delete the student");
+                  }
+                }}
+              >
+                {deleting ? <span className="spinner" /> : <Trash2 size={15} />}
+                Delete permanently
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                className="danger-button drawer-delete-button"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 size={15} /> Delete student
+              </button>
+              <button
+                className="secondary-button"
+                disabled={!matches.length}
+                onClick={onReport}
+              >
+                <FileText size={16} /> Shortlist report
+              </button>
+              {tab !== "Matches" && (
+                <button
+                  className="primary-button"
+                  onClick={() => setTab("Matches")}
+                >
+                  <Sparkles size={16} /> View matches
+                </button>
+              )}
+            </>
           )}
         </footer>
       </aside>
