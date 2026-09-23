@@ -1,0 +1,4 @@
+project_id = "Admissions-Portal"
+
+[auth.email]
+enable_confirmations = false

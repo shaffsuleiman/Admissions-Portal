@@ -1,0 +1,50 @@
+[
+  {
+    "slug": "padua",
+    "title": "Palazzo Bo (Padua).jpg",
+    "author": "Didier Descouens",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Palazzo_Bo_(Padua).jpg"
+  },
+  {
+    "slug": "bologna",
+    "title": "Archiginnasio ora blu Bologna.jpg",
+    "author": "Wwikiwalter",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Archiginnasio_ora_blu_Bologna.jpg"
+  },
+  {
+    "slug": "turin",
+    "title": "Valentino castle.jpg",
+    "author": "Golden globe",
+    "license": "Public domain",
+    "licenseUrl": "",
+    "source": "https://commons.wikimedia.org/wiki/File:Valentino_castle.jpg"
+  },
+  {
+    "slug": "milan",
+    "title": "Ca' Granda, Milan, Cortile crociera 1.JPG",
+    "author": "Luca Borghi",
+    "license": "Public domain",
+    "licenseUrl": "",
+    "source": "https://commons.wikimedia.org/wiki/File:Ca%27_Granda,_Milan,_Cortile_crociera_1.JPG"
+  },
+  {
+    "slug": "pisa",
+    "title": "UniPI Palazzo Sapienza.jpg",
+    "author": "Antonio D'Agnelli",
+    "license": "Public domain",
+    "licenseUrl": "",
+    "source": "https://commons.wikimedia.org/wiki/File:UniPI_Palazzo_Sapienza.jpg"
+  },
+  {
+    "slug": "venice",
+    "title": "Palazzo Giustinian + Ca' Foscari Venedig.jpg",
+    "author": "Freddo213",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Palazzo_Giustinian_%2B_Ca%27_Foscari_Venedig.jpg"
+  }
+]
