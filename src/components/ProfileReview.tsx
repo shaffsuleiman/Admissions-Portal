@@ -50,6 +50,7 @@ export function ProfileReview({
     Object.fromEntries(student.documents.filter((document) => document.extraction).map((document) => [document.id, document.extraction!])),
   );
   const [reading, setReading] = useState("");
+  const [bulkMessage, setBulkMessage] = useState("");
   const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -62,6 +63,7 @@ export function ProfileReview({
 
   const read = async (documentId: string) => {
     setReading(documentId);
+    setBulkMessage("");
     setError("");
     try {
       const extraction = await onRead(documentId);
@@ -73,33 +75,8 @@ export function ProfileReview({
     }
   };
 
-  const readAll = async () => {
-    const documents = student.documents.filter(readable);
-    if (!documents.length) return;
-    setReading("all");
-    setError("");
-    const results = await Promise.allSettled(
-      documents.map(async (document) => [document.id, await onRead(document.id)] as const),
-    );
-    const successful = results.filter(
-      (result): result is PromiseFulfilledResult<readonly [string, TranscriptExtraction]> => result.status === "fulfilled",
-    );
-    if (successful.length) {
-      setExtractions((current) => ({
-        ...current,
-        ...Object.fromEntries(successful.map((result) => result.value)),
-      }));
-    }
-    if (successful.length !== documents.length) {
-      setError(`${documents.length - successful.length} document${documents.length - successful.length === 1 ? "" : "s"} could not be read.`);
-    }
-    setReading("");
-  };
-
-  // Applies every AI reading to the form. The counsellor still edits and confirms.
-  const applyAi = () => {
+  const applyReadings = (readings: TranscriptExtraction[]) => {
     const filled = new Set<string>();
-    const readings = Object.values(extractions);
     const pick = <K extends keyof TranscriptExtraction>(key: K) => readings.map((reading) => reading[key]).find((value) => value != null && value !== "");
     const set = (key: string, value: unknown, setter: (value: string) => void) => {
       if (value == null || value === "") return;
@@ -122,7 +99,14 @@ export function ProfileReview({
       setMoi(true);
       filled.add("moi");
     }
-    const extracted = readings.flatMap((reading) => reading.courses ?? []);
+    const uniqueCourses = new Map<string, NonNullable<TranscriptExtraction["courses"]>[number]>();
+    for (const course of readings.flatMap((reading) => reading.courses ?? [])) {
+      const key = [course.title, course.credit_hours ?? "", course.grade ?? ""]
+        .map((value) => String(value).trim().toLowerCase().replace(/\s+/g, " "))
+        .join("|");
+      if (!uniqueCourses.has(key)) uniqueCourses.set(key, course);
+    }
+    const extracted = [...uniqueCourses.values()];
     if (extracted.length) {
       setCourses(
         extracted.map((course) => ({
@@ -136,6 +120,50 @@ export function ProfileReview({
       filled.add("courses");
     }
     setAiFilled(filled);
+  };
+
+  // Applies every AI reading to the form. The counsellor still edits and confirms.
+  const applyAi = () => applyReadings(Object.values(extractions));
+
+  const readAll = async () => {
+    const documents = student.documents.filter(readable);
+    if (!documents.length) return;
+    setBulkMessage("");
+    setError("");
+
+    const combined = { ...extractions };
+    const unread = documents.filter((document) => !combined[document.id]);
+    const failures: string[] = [];
+    let newlyRead = 0;
+
+    try {
+      // Run one request at a time so a multi-file profile does not exhaust Gemini's
+      // per-minute quota. A failed file does not discard the successful readings.
+      for (const [index, document] of unread.entries()) {
+        setReading(`all:${index + 1}:${unread.length}`);
+        try {
+          const extraction = await onRead(document.id);
+          combined[document.id] = extraction;
+          newlyRead += 1;
+          setExtractions({ ...combined });
+        } catch (caught) {
+          failures.push(`${document.name}: ${messageOf(caught) ?? "reading failed"}`);
+        }
+      }
+
+      const readings = Object.values(combined);
+      if (readings.length) {
+        setExtractions(combined);
+        applyReadings(readings);
+        const reused = readings.length - newlyRead;
+        setBulkMessage(
+          `${readings.length} document${readings.length === 1 ? "" : "s"} combined and filled${reused > 0 ? ` (${reused} already read)` : ""}. Review before confirming.`,
+        );
+      }
+      if (failures.length) setError(failures.join(" "));
+    } finally {
+      setReading("");
+    }
   };
 
   const totals = useMemo(() => {
@@ -215,8 +243,10 @@ export function ProfileReview({
                   disabled={!student.documents.some(readable) || Boolean(reading)}
                   onClick={() => void readAll()}
                 >
-                  {reading === "all" ? <span className="spinner dark" /> : <Sparkles size={14} />}
-                  Read all with AI
+                  {reading.startsWith("all:") ? <span className="spinner dark" /> : <Sparkles size={14} />}
+                  {reading.startsWith("all:")
+                    ? `Reading ${reading.split(":")[1]} of ${reading.split(":")[2]}…`
+                    : "Extract and fill from all documents"}
                 </button>
               </div>
               {student.documents.map((document) => (
@@ -250,11 +280,11 @@ export function ProfileReview({
               <div className="review-ai-bar">
                 <Sparkles size={16} />
                 <span>
-                  {Object.keys(extractions).length} document{Object.keys(extractions).length === 1 ? "" : "s"} read.
+                  {bulkMessage || `${Object.keys(extractions).length} document${Object.keys(extractions).length === 1 ? "" : "s"} read.`}
                   {lowConfidence && " Some pages were hard to read, check every field."}
                 </span>
                 <button className="primary-button" onClick={applyAi}>
-                  Use AI results
+                  Apply AI results
                 </button>
               </div>
             )}
