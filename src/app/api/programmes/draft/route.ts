@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     if (!isPublicHttpUrl(sourceUrl))
       return Response.json({ error: "Enter a public http(s) link to the admissions call." }, { status: 400 });
     const source = await fetch(sourceUrl, {
-      headers: { "User-Agent": "MeritAdmissionsVerifier/1.0" },
+      headers: { "User-Agent": "SHAFFMINNAAdmissionsVerifier/1.0" },
       signal: AbortSignal.timeout(20_000),
       redirect: "follow",
     }).catch(() => null);

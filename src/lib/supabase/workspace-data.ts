@@ -745,6 +745,15 @@ function documentType(file: File) {
   return "other";
 }
 
+function documentMimeType(file: File) {
+  if (file.type === "application/pdf" || file.type === "image/jpeg" || file.type === "image/png") return file.type;
+  const extension = file.name.toLowerCase().split(".").pop();
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "png") return "image/png";
+  return "application/octet-stream";
+}
+
 export async function createStudent(
   workspaceId: string,
   input: NewStudentInput,
@@ -801,10 +810,11 @@ export async function createStudent(
         .replace(/^-+|-+$/g, "") || "document";
     const documentId = crypto.randomUUID();
     const storagePath = `${workspaceId}/${student.id}/${documentId}-${safeName}`;
+    const mimeType = documentMimeType(file);
     const { error: uploadError } = await supabase.storage
       .from("student-documents")
       .upload(storagePath, file, {
-        contentType: file.type || undefined,
+        contentType: mimeType,
         upsert: false,
       });
     if (uploadError) throw uploadError;
@@ -815,7 +825,7 @@ export async function createStudent(
       document_type: documentType(file),
       storage_path: storagePath,
       file_name: file.name,
-      mime_type: file.type || null,
+      mime_type: mimeType,
       size_bytes: file.size,
       extraction_status: "pending",
     });

@@ -1,4 +1,4 @@
-# Merit Admissions OS
+# SHAFFMINNA Admissions OS
 
 Admissions matching and application management for education consultancies. The frontend is built with Next.js 16 and the backend foundation uses Supabase Auth, Postgres, Storage, and Row Level Security.
 

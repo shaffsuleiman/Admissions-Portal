@@ -73,6 +73,29 @@ export function ProfileReview({
     }
   };
 
+  const readAll = async () => {
+    const documents = student.documents.filter(readable);
+    if (!documents.length) return;
+    setReading("all");
+    setError("");
+    const results = await Promise.allSettled(
+      documents.map(async (document) => [document.id, await onRead(document.id)] as const),
+    );
+    const successful = results.filter(
+      (result): result is PromiseFulfilledResult<readonly [string, TranscriptExtraction]> => result.status === "fulfilled",
+    );
+    if (successful.length) {
+      setExtractions((current) => ({
+        ...current,
+        ...Object.fromEntries(successful.map((result) => result.value)),
+      }));
+    }
+    if (successful.length !== documents.length) {
+      setError(`${documents.length - successful.length} document${documents.length - successful.length === 1 ? "" : "s"} could not be read.`);
+    }
+    setReading("");
+  };
+
   // Applies every AI reading to the form. The counsellor still edits and confirms.
   const applyAi = () => {
     const filled = new Set<string>();
@@ -186,6 +209,16 @@ export function ProfileReview({
               <p>AI reads each file and fills the form. Nothing is used for matching until you confirm.</p>
             </div>
             <div className="review-docs">
+              <div className="review-docs-actions">
+                <button
+                  className="outline-button"
+                  disabled={!student.documents.some(readable) || Boolean(reading)}
+                  onClick={() => void readAll()}
+                >
+                  {reading === "all" ? <span className="spinner dark" /> : <Sparkles size={14} />}
+                  Read all with AI
+                </button>
+              </div>
               {student.documents.map((document) => (
                 <div className="review-doc" key={document.id}>
                   <FileText size={17} />

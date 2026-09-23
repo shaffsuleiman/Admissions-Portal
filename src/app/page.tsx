@@ -169,7 +169,7 @@ function Brand({ light = false }: { light?: boolean }) {
         <span />
       </div>
       <div>
-        <strong>Merit</strong>
+        <strong>SHAFFMINNA</strong>
         <small>ADMISSIONS OS</small>
       </div>
     </div>
@@ -521,7 +521,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               </>
             ) : (
               <>
-                New to Merit?{" "}
+                New to SHAFFMINNA?{" "}
                 <button onClick={() => switchMode("signup")}>
                   Create a workspace
                 </button>
@@ -530,7 +530,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </p>
           {configured ? (
             <p className="demo-notice connected">
-              <ShieldCheck size={13} /> Secure sign-in · connected to your Merit
+              <ShieldCheck size={13} /> Secure sign-in · connected to your SHAFFMINNA
               workspace
             </p>
           ) : (
@@ -3656,6 +3656,13 @@ const formatBytes = (bytes: number) =>
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
+const supportedDocumentTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const documentMimeType = (file: File) => {
+  if (supportedDocumentTypes.has(file.type)) return file.type;
+  const extension = file.name.toLowerCase().split(".").pop();
+  return extension === "pdf" ? "application/pdf" : extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "png" ? "image/png" : "";
+};
+
 function NewStudentWizard({
   onClose,
   onComplete,
@@ -3693,10 +3700,19 @@ function NewStudentWizard({
           : true;
   const addFiles = (list: FileList | null) => {
     if (!list) return;
+    const selected = Array.from(list);
+    const rejected = selected.filter((file) => !documentMimeType(file) || file.size > 20 * 1024 * 1024);
+    if (rejected.length) {
+      setError(`${rejected.map((file) => file.name).join(", ")} ${rejected.length === 1 ? "is" : "are"} not supported. Choose PDF, JPG or PNG files up to 20MB.`);
+    } else {
+      setError("");
+    }
     setFiles((current) => [
       ...current,
-      ...Array.from(list).filter(
+      ...selected.filter(
         (file) =>
+          documentMimeType(file) &&
+          file.size <= 20 * 1024 * 1024 &&
           !current.some(
             (existing) =>
               existing.name === file.name && existing.size === file.size,
@@ -3834,6 +3850,7 @@ function NewStudentWizard({
               </p>
               <input
                 ref={fileInput}
+                id="student-document-upload"
                 type="file"
                 multiple
                 accept=".pdf,.jpg,.jpeg,.png"
@@ -3843,9 +3860,9 @@ function NewStudentWizard({
                   event.target.value = "";
                 }}
               />
-              <button
+              <label
+                htmlFor="student-document-upload"
                 className={`drop-zone ${dragging ? "dragging" : ""}`}
-                onClick={() => fileInput.current?.click()}
                 onDragOver={(event) => {
                   event.preventDefault();
                   setDragging(true);
@@ -3864,7 +3881,7 @@ function NewStudentWizard({
                 <small>
                   Transcript, degree, IELTS · PDF, JPG, or PNG · 20MB max
                 </small>
-              </button>
+              </label>
               {files.map((file) => (
                 <div className="uploaded-file" key={file.name}>
                   <FileText size={18} />
@@ -3988,7 +4005,7 @@ function NewStudentWizard({
               </div>
               <h3>Everything looks ready.</h3>
               <p>
-                Merit will create {firstName}’s profile and prepare{" "}
+                SHAFFMINNA will create {firstName}’s profile and prepare{" "}
                 {files.length} uploaded{" "}
                 {files.length === 1 ? "document" : "documents"} for your review.
               </p>
