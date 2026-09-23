@@ -17,11 +17,20 @@ import turinPhoto from "../../public/images/campus/turin.jpg";
 import venicePhoto from "../../public/images/campus/venice.jpg";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { ProfileReview } from "@/components/ProfileReview";
+import { ProgrammeEditor } from "@/components/ProgrammeEditor";
+import { ShortlistReport } from "@/components/ShortlistReport";
 import {
   createApplicationFromMatch,
+  messageOf,
   createStudent,
+  draftProgrammeRules,
+  extractDocument,
   loadWorkspaceData,
   runStudentMatch,
+  saveConfirmedProfile,
+  saveProgramme,
+  saveUniversityConversion,
   updateApplicationStage,
   updateWorkspaceProfile,
   type Application,
@@ -31,6 +40,7 @@ import {
   type Programme,
   type Student,
   type TeamMember,
+  type University,
   type Workspace,
   type WorkspaceData,
 } from "@/lib/supabase/workspace-data";
@@ -166,14 +176,23 @@ function Brand({ light = false }: { light?: boolean }) {
   );
 }
 
-const campusPhotos: { match: RegExp; photo: StaticImageData; place: string }[] = [
-  { match: /padua|padova/i, photo: paduaPhoto, place: "Palazzo Bo, Padua" },
-  { match: /bologna/i, photo: bolognaPhoto, place: "Archiginnasio, Bologna" },
-  { match: /torino|turin/i, photo: turinPhoto, place: "Castello del Valentino, Turin" },
-  { match: /milan|milano/i, photo: milanPhoto, place: "Ca’ Granda, Milan" },
-  { match: /pisa/i, photo: pisaPhoto, place: "Palazzo della Sapienza, Pisa" },
-  { match: /venice|venezia|foscari/i, photo: venicePhoto, place: "Ca’ Foscari, Venice" },
-];
+const campusPhotos: { match: RegExp; photo: StaticImageData; place: string }[] =
+  [
+    { match: /padua|padova/i, photo: paduaPhoto, place: "Palazzo Bo, Padua" },
+    { match: /bologna/i, photo: bolognaPhoto, place: "Archiginnasio, Bologna" },
+    {
+      match: /torino|turin/i,
+      photo: turinPhoto,
+      place: "Castello del Valentino, Turin",
+    },
+    { match: /milan|milano/i, photo: milanPhoto, place: "Ca’ Granda, Milan" },
+    { match: /pisa/i, photo: pisaPhoto, place: "Palazzo della Sapienza, Pisa" },
+    {
+      match: /venice|venezia|foscari/i,
+      photo: venicePhoto,
+      place: "Ca’ Foscari, Venice",
+    },
+  ];
 
 const campusPhotoFor = (university: string) =>
   campusPhotos.find((campus) => campus.match.test(university));
@@ -191,7 +210,10 @@ function CampusMark({
   size?: "mini" | "large" | "small";
 }) {
   const campus = campusPhotoFor(university);
-  const className = size === "mini" ? "mini-school" : `school-logo ${size === "small" ? "small" : ""}`;
+  const className =
+    size === "mini"
+      ? "mini-school"
+      : `school-logo ${size === "small" ? "small" : ""}`;
   if (!campus) return <span className={`${className} ${tone}`}>{code}</span>;
   return (
     <span className={`${className} campus-mark`}>
@@ -353,7 +375,11 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </figure>
           <div className="story-card">
             <div className="story-match">
-              <CampusMark university="University of Bologna" code="UB" tone="red" />
+              <CampusMark
+                university="University of Bologna"
+                code="UB"
+                tone="red"
+              />
               <div>
                 <strong>MSc Computer Science</strong>
                 <span>University of Bologna</span>
@@ -367,8 +393,8 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </div>
         </div>
         <p className="story-foot">
-          Photos: Ca’ Foscari by Freddo213, Archiginnasio by Wwikiwalter, Palazzo
-          Bo by Didier Descouens · CC BY-SA 4.0 via Wikimedia Commons
+          Photos: Ca’ Foscari by Freddo213, Archiginnasio by Wwikiwalter,
+          Palazzo Bo by Didier Descouens · CC BY-SA 4.0 via Wikimedia Commons
         </p>
       </section>
       <section className="auth-panel">
@@ -536,6 +562,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [dataError, setDataError] = useState("");
   const [loadingData, setLoadingData] = useState(true);
+  const [reviewStudentId, setReviewStudentId] = useState("");
+  const [reportStudentId, setReportStudentId] = useState("");
+  const [editingProgramme, setEditingProgramme] = useState<
+    Programme | "new" | null
+  >(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const searchInput = useRef<HTMLInputElement>(null);
 
@@ -544,11 +575,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
     try {
       setData(await loadWorkspaceData());
     } catch (error) {
-      setDataError(
-        error instanceof Error
-          ? error.message
-          : "Could not load your workspace.",
-      );
+      setDataError(messageOf(error) ?? "Could not load your workspace.");
     } finally {
       setLoadingData(false);
     }
@@ -562,11 +589,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
       })
       .catch((error) => {
         if (!cancelled)
-          setDataError(
-            error instanceof Error
-              ? error.message
-              : "Could not load your workspace.",
-          );
+          setDataError(messageOf(error) ?? "Could not load your workspace.");
       })
       .finally(() => {
         if (!cancelled) setLoadingData(false);
@@ -645,7 +668,20 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
     matches,
     applications,
     deadlines,
+    isVerifier,
+    universities,
   } = data;
+  // Always show the latest saved copy of a student, not the one captured when it was opened.
+  const drawerStudent = selectedStudent
+    ? (students.find((student) => student.id === selectedStudent.id) ??
+      selectedStudent)
+    : null;
+  const reviewStudent = students.find(
+    (student) => student.id === reviewStudentId,
+  );
+  const reportStudent = students.find(
+    (student) => student.id === reportStudentId,
+  );
   const dueThisWeek = deadlines.filter(
     (deadline) =>
       !deadline.completedAt &&
@@ -822,10 +858,12 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               students={students}
               matches={matches}
               onOpen={(student) => setSelectedStudent(student)}
+              onReview={(student) => setReviewStudentId(student.id)}
+              onReport={(student) => setReportStudentId(student.id)}
               onRun={async (student) => {
                 const count = await runStudentMatch(workspace.id, student.id);
                 await refresh();
-                notify(`${count} verified programmes checked and saved`);
+                notify(`${count} programmes checked and saved`);
               }}
               onStartApplication={async (match) => {
                 await createApplicationFromMatch(
@@ -840,7 +878,13 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             />
           )}
           {view === "Programmes" && (
-            <ProgrammesView programmes={programmes} onNotify={notify} />
+            <ProgrammesView
+              programmes={programmes}
+              universities={universities}
+              isVerifier={isVerifier}
+              onEdit={setEditingProgramme}
+              onNotify={notify}
+            />
           )}
           {view === "Applications" && (
             <ApplicationsView
@@ -851,11 +895,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
                   await refresh();
                   notify("Application stage updated");
                 } catch (error) {
-                  notify(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not update application",
-                  );
+                  notify(messageOf(error) ?? "Could not update application");
                 }
               }}
             />
@@ -893,25 +933,118 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
         <NewStudentWizard
           onClose={() => setNewStudent(false)}
           onComplete={async (input) => {
-            await createStudent(workspace.id, input);
+            const studentId = await createStudent(workspace.id, input);
             await refresh();
             setNewStudent(false);
             notify(`${input.firstName} ${input.lastName}’s profile was saved`);
+            // Straight into review, where AI reads the uploads and the counsellor confirms.
+            if (input.files.length) setReviewStudentId(studentId);
           }}
         />
       )}
-      {selectedStudent && (
+      {drawerStudent && (
         <StudentDrawer
-          key={selectedStudent.id}
-          student={selectedStudent}
+          key={drawerStudent.id}
+          student={drawerStudent}
           matches={matches.filter(
-            (match) => match.studentId === selectedStudent.id,
+            (match) => match.studentId === drawerStudent.id,
           )}
           applications={applications.filter(
-            (application) => application.studentId === selectedStudent.id,
+            (application) => application.studentId === drawerStudent.id,
           )}
           onClose={() => setSelectedStudent(null)}
+          onReview={() => setReviewStudentId(drawerStudent.id)}
+          onReport={() => setReportStudentId(drawerStudent.id)}
           onNotify={notify}
+        />
+      )}
+      {reviewStudent && (
+        <ProfileReview
+          key={`review-${reviewStudent.id}`}
+          student={reviewStudent}
+          onClose={() => setReviewStudentId("")}
+          onRead={async (documentId) => {
+            const extraction = await extractDocument(documentId);
+            void refresh();
+            return extraction;
+          }}
+          onSave={async (input) => {
+            await saveConfirmedProfile(workspace.id, reviewStudent.id, input);
+            await refresh();
+            setReviewStudentId("");
+            notify(
+              `${reviewStudent.name.split(" ")[0]}’s profile confirmed. Run a match next.`,
+            );
+          }}
+        />
+      )}
+      {editingProgramme && (
+        <ProgrammeEditor
+          programme={editingProgramme === "new" ? null : editingProgramme}
+          universities={universities}
+          onClose={() => setEditingProgramme(null)}
+          onDraft={draftProgrammeRules}
+          onSave={async (input, conversion) => {
+            await saveProgramme(input);
+            if (conversion)
+              await saveUniversityConversion(
+                conversion.universityId,
+                conversion.conversion,
+              );
+            await refresh();
+            setEditingProgramme(null);
+            notify(
+              input.status === "verified"
+                ? `${input.programme} verified`
+                : `${input.programme} saved for review`,
+            );
+          }}
+        />
+      )}
+      {reportStudent && (
+        <ShortlistReport
+          workspace={workspace}
+          counsellor={currentUser}
+          student={reportStudent}
+          matches={matches.filter(
+            (match) => match.studentId === reportStudent.id,
+          )}
+          onClose={() => setReportStudentId("")}
+          onCsv={() => {
+            const rows = matches.filter(
+              (match) => match.studentId === reportStudent.id,
+            );
+            downloadCsv(
+              `${reportStudent.name.toLowerCase().replaceAll(" ", "-")}-shortlist.csv`,
+              [
+                [
+                  "Programme",
+                  "University",
+                  "City",
+                  "Result",
+                  "Score",
+                  "Tuition",
+                  "Deadline",
+                  "Rules verified",
+                  "Checks",
+                  "Source",
+                ],
+                ...rows.map((m) => [
+                  m.programme,
+                  m.university,
+                  m.city,
+                  m.status,
+                  m.score,
+                  m.fee,
+                  m.deadline,
+                  m.programmeVerified ? m.verified : "Not verified",
+                  m.reasons.join("; "),
+                  m.source,
+                ]),
+              ],
+            );
+            notify("Shortlist CSV downloaded");
+          }}
         />
       )}
       <div className="toast-region" role="status" aria-live="polite">
@@ -1035,7 +1168,8 @@ function Overview({
     .toUpperCase();
   const firstName = user.name.split(" ")[0];
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   // A different campus greets the team each day.
   const heroCampus = campusPhotos[new Date().getDate() % campusPhotos.length];
   return (
@@ -1238,7 +1372,11 @@ function Overview({
           )}
           {latestMatches.map((match) => (
             <div className="mini-match" key={match.id}>
-              <CampusMark university={match.university} code={match.logo} tone={match.tone} />
+              <CampusMark
+                university={match.university}
+                code={match.logo}
+                tone={match.tone}
+              />
               <div>
                 <strong>{match.programme}</strong>
                 <span>
@@ -1539,6 +1677,8 @@ function MatchesView({
   students,
   matches,
   onOpen,
+  onReview,
+  onReport,
   onRun,
   onStartApplication,
   onNotify,
@@ -1546,6 +1686,8 @@ function MatchesView({
   students: Student[];
   matches: MatchResult[];
   onOpen: (student: Student) => void;
+  onReview: (student: Student) => void;
+  onReport: (student: Student) => void;
   onRun: (student: Student) => Promise<void>;
   onStartApplication: (match: MatchResult) => Promise<void>;
   onNotify: (message: string) => void;
@@ -1567,9 +1709,7 @@ function MatchesView({
     try {
       await onRun(student);
     } catch (error) {
-      onNotify(
-        error instanceof Error ? error.message : "Could not run matching",
-      );
+      onNotify(messageOf(error) ?? "Could not run matching");
     } finally {
       setRunning(false);
     }
@@ -1596,50 +1736,29 @@ function MatchesView({
       <PageTitle
         eyebrow="ELIGIBILITY ENGINE"
         title="Match centre"
-        text="Auditable results calculated from saved academic profiles and verified programme rules."
+        text="Every result comes from fixed rules, never AI guesses, with the exact reason for each check."
       >
         <button
           className="secondary-button"
           disabled={!studentMatches.length}
-          onClick={() => {
-            downloadCsv(
-              `${student.name.toLowerCase().replaceAll(" ", "-")}-shortlist.csv`,
-              [
-                [
-                  "Programme",
-                  "University",
-                  "City",
-                  "Status",
-                  "Score %",
-                  "Tuition",
-                  "Deadline",
-                  "Verified",
-                ],
-                ...studentMatches.map((m) => [
-                  m.programme,
-                  m.university,
-                  m.city,
-                  m.status,
-                  m.score,
-                  m.fee,
-                  m.deadline,
-                  m.verified,
-                ]),
-              ],
-            );
-            onNotify("Shortlist downloaded");
-          }}
+          onClick={() => onReport(student)}
         >
-          <Download size={16} /> Download shortlist
+          <FileText size={16} /> Shortlist report
         </button>
-        <button
-          className="primary-button"
-          disabled={running}
-          onClick={() => void run()}
-        >
-          {running ? <span className="spinner" /> : <Sparkles size={16} />}{" "}
-          {running ? "Matching…" : "Run new match"}
-        </button>
+        {student.academic.confirmedAt ? (
+          <button
+            className="primary-button"
+            disabled={running}
+            onClick={() => void run()}
+          >
+            {running ? <span className="spinner" /> : <Sparkles size={16} />}{" "}
+            {running ? "Matching…" : "Run new match"}
+          </button>
+        ) : (
+          <button className="primary-button" onClick={() => onReview(student)}>
+            <ShieldCheck size={16} /> Review profile first
+          </button>
+        )}
       </PageTitle>
       <div className="match-profile-bar">
         <label className="profile-select">
@@ -1671,13 +1790,19 @@ function MatchesView({
           <span>
             <BookOpen size={15} />
             <b>
-              {student.credits.reduce(
-                (total, credit) => total + credit.ects,
-                0,
+              {Math.round(
+                student.credits.reduce(
+                  (total, credit) => total + credit.ects,
+                  0,
+                ),
               )}{" "}
               mapped ECTS
             </b>
-            <small>{student.progress}% profile complete</small>
+            <small>
+              {student.academic.confirmedAt
+                ? `Confirmed ${new Date(student.academic.confirmedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+                : "Profile not confirmed"}
+            </small>
           </span>
           <span>
             <Flag size={15} />
@@ -1755,13 +1880,25 @@ function MatchesView({
         {visible.map((match) => (
           <article className="match-card" key={match.id}>
             <div className="match-main">
-              <CampusMark university={match.university} code={match.logo} tone={match.tone} size="large" />
+              <CampusMark
+                university={match.university}
+                code={match.logo}
+                tone={match.tone}
+                size="large"
+              />
               <div className="match-title">
                 <div>
                   <Status text={match.status} />
-                  <span className="fresh-label">
-                    <ShieldCheck size={12} /> Verified {match.verified}
-                  </span>
+                  {match.programmeVerified ? (
+                    <span className="fresh-label">
+                      <ShieldCheck size={12} /> Rules verified {match.verified}
+                    </span>
+                  ) : (
+                    <span className="unverified-label">
+                      <CircleAlert size={12} /> Unverified rules: check the
+                      source before advising
+                    </span>
+                  )}
                 </div>
                 <h2>{match.programme}</h2>
                 <p>
@@ -1790,21 +1927,35 @@ function MatchesView({
             </div>
             <div className="rule-bar">
               <div>
-                {match.reasons.map((reason, index) => (
-                  <span
-                    key={`${reason}-${index}`}
-                    className={
-                      /below|short|0 \/|not /i.test(reason) ? "fail" : ""
-                    }
-                  >
-                    {/below|short|0 \/|not /i.test(reason) ? (
-                      <X size={13} />
-                    ) : (
-                      <Check size={13} />
-                    )}
-                    {reason}
-                  </span>
-                ))}
+                {match.checks.length
+                  ? match.checks.map((check, index) => (
+                      <span
+                        key={`${check.key}-${index}`}
+                        className={
+                          check.outcome === "fail"
+                            ? "fail"
+                            : check.outcome === "borderline"
+                              ? "warn"
+                              : ""
+                        }
+                        title={check.label}
+                      >
+                        {check.outcome === "fail" ? (
+                          <X size={13} />
+                        ) : check.outcome === "borderline" ? (
+                          <CircleAlert size={13} />
+                        ) : (
+                          <Check size={13} />
+                        )}
+                        {check.detail}
+                      </span>
+                    ))
+                  : match.reasons.map((reason, index) => (
+                      <span key={`${reason}-${index}`}>
+                        <Check size={13} />
+                        {reason}
+                      </span>
+                    ))}
               </div>
               <button
                 disabled={startingApplication === match.id}
@@ -1814,9 +1965,7 @@ function MatchesView({
                     await onStartApplication(match);
                   } catch (error) {
                     onNotify(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not create application",
+                      messageOf(error) ?? "Could not create application",
                     );
                   } finally {
                     setStartingApplication("");
@@ -1842,7 +1991,9 @@ function MatchesView({
             <span>
               {studentMatches.length
                 ? "Choose another result filter."
-                : "Run a new match to check every verified programme."}
+                : student.academic.confirmedAt
+                  ? "Run a new match to check every published programme."
+                  : "Review and confirm the student’s profile, then run a match."}
             </span>
           </div>
         )}
@@ -1851,16 +2002,46 @@ function MatchesView({
   );
 }
 
+function ProgrammeStatus({ programme }: { programme: Programme }) {
+  if (programme.status === "verified")
+    return (
+      <span className="fresh-cell">
+        <ShieldCheck size={13} />
+        {programme.freshness}
+      </span>
+    );
+  return (
+    <span className="fresh-cell unverified">
+      <CircleAlert size={13} />
+      {programme.status === "in_review" ? "In review" : "Not verified"}
+    </span>
+  );
+}
+
 function ProgrammesView({
   programmes,
+  universities,
+  isVerifier,
+  onEdit,
   onNotify,
 }: {
   programmes: Programme[];
+  universities: University[];
+  isVerifier: boolean;
+  onEdit: (programme: Programme | "new") => void;
   onNotify: (message: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [catalogue, setCatalogue] = useState<"programmes" | "universities">(
+    "programmes",
+  );
   const visible = programmes.filter((programme) =>
     `${programme.programme} ${programme.university} ${programme.city}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  const visibleUniversities = universities.filter((university) =>
+    `${university.name} ${university.region} ${university.institutionType}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
@@ -1873,6 +2054,172 @@ function ProgrammesView({
   const stale = programmes.filter((programme) =>
     ["stale", "unverified"].includes(programme.status),
   ).length;
+  const catalogueTabs = (
+    <div className="tab-bar" role="tablist" aria-label="Catalogue view">
+      <button
+        role="tab"
+        aria-selected={catalogue === "programmes"}
+        className={catalogue === "programmes" ? "active" : ""}
+        onClick={() => {
+          setCatalogue("programmes");
+          setQuery("");
+        }}
+      >
+        Programmes <span>{programmes.length}</span>
+      </button>
+      <button
+        role="tab"
+        aria-selected={catalogue === "universities"}
+        className={catalogue === "universities" ? "active" : ""}
+        onClick={() => {
+          setCatalogue("universities");
+          setQuery("");
+        }}
+      >
+        Italian universities <span>{universities.length}</span>
+      </button>
+    </div>
+  );
+  if (catalogue === "universities") {
+    const stateCount = universities.filter(
+      (university) => university.institutionType === "Statale",
+    ).length;
+    const privateCount = universities.length - stateCount;
+    const onlineCount = universities.filter(
+      (university) => university.isTelematic,
+    ).length;
+    return (
+      <>
+        <PageTitle
+          eyebrow="OFFICIAL MUR DIRECTORY"
+          title="Italian universities"
+          text="Every institution currently listed in the Ministry’s USTAT university directory."
+        >
+          <button
+            className="secondary-button"
+            onClick={() => {
+              downloadCsv("italian-universities.csv", [
+                ["University", "Region", "Type", "Delivery", "Official source"],
+                ...visibleUniversities.map((university) => [
+                  university.name,
+                  university.region,
+                  university.institutionType,
+                  university.isTelematic ? "Online" : "Campus",
+                  university.source,
+                ]),
+              ]);
+              onNotify("University directory exported");
+            }}
+          >
+            <Download size={16} /> Export directory
+          </button>
+        </PageTitle>
+        {catalogueTabs}
+        <div className="database-banner">
+          <div className="database-icon">
+            <Building2 size={22} />
+          </div>
+          <div>
+            <strong>Complete official institution coverage</strong>
+            <span>
+              {universities.length} institutions · 20 regions · sourced from MUR
+              USTAT on 23 September 2026
+            </span>
+          </div>
+          <div className="database-stats">
+            <span>
+              <b>{stateCount}</b> state
+            </span>
+            <span className="warn">
+              <b>{privateCount}</b> non-state
+            </span>
+            <span>
+              <b>{onlineCount}</b> online
+            </span>
+          </div>
+        </div>
+        <div className="programme-filters">
+          <div className="search-box">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search university, region, or type"
+              aria-label="Search Italian universities"
+            />
+            {query && (
+              <button
+                className="clear-search"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="panel data-table programme-table university-directory">
+          <div className="table-head">
+            <span>UNIVERSITY</span>
+            <span>REGION</span>
+            <span>OWNERSHIP</span>
+            <span>DELIVERY</span>
+            <span>DIRECTORY STATUS</span>
+            <span />
+          </div>
+          {visibleUniversities.map((university) => {
+            const code = university.name
+              .split(/\s+/)
+              .filter((word) => word.length > 3)
+              .slice(0, 2)
+              .map((word) => word[0])
+              .join("")
+              .toUpperCase();
+            return (
+              <a
+                className="table-row"
+                key={university.id}
+                href={university.source}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`${university.name}, official MUR listing`}
+              >
+                <span className="person-cell">
+                  <CampusMark
+                    university={university.name}
+                    code={code}
+                    tone="blue"
+                    size="small"
+                  />
+                  <span>
+                    <strong>{university.name}</strong>
+                    <small>Italy · {university.slug}</small>
+                  </span>
+                </span>
+                <span>{university.region}</span>
+                <span>
+                  <b>{university.institutionType}</b>
+                </span>
+                <span>{university.isTelematic ? "Online" : "Campus"}</span>
+                <span className="fresh-cell">
+                  <ShieldCheck size={13} />
+                  Official MUR listing
+                </span>
+                <ExternalLink size={15} />
+              </a>
+            );
+          })}
+          {!visibleUniversities.length && (
+            <div className="empty-state">
+              <Search size={24} />
+              <strong>No universities found</strong>
+              <span>Try another name, region, or institution type.</span>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <PageTitle
@@ -1910,15 +2257,22 @@ function ProgrammesView({
         >
           <Download size={16} /> Export database
         </button>
+        {isVerifier && (
+          <button className="primary-button" onClick={() => onEdit("new")}>
+            <Plus size={17} /> Add programme
+          </button>
+        )}
       </PageTitle>
+      {catalogueTabs}
       <div className="database-banner">
         <div className="database-icon">
           <ShieldCheck size={22} />
         </div>
         <div>
-          <strong>Verified programme catalogue</strong>
+          <strong>Programme catalogue</strong>
           <span>
-            {programmes.length} programmes in your verified catalogue
+            {verified} of {programmes.length} programmes checked against their
+            official admissions call
           </span>
         </div>
         <div className="database-stats">
@@ -1962,7 +2316,9 @@ function ProgrammesView({
           <Filter size={15} /> More filters
         </button>
       </div>
-      <div className="panel data-table programme-table">
+      <div
+        className={`panel data-table programme-table ${isVerifier ? "verifier" : ""}`}
+      >
         <div className="table-head">
           <span>PROGRAMME</span>
           <span>INTAKE</span>
@@ -1971,36 +2327,65 @@ function ProgrammesView({
           <span>DATA STATUS</span>
           <span />
         </div>
-        {visible.map((programme) => (
-          <a
-            className="table-row"
-            key={programme.id}
-            href={programme.source}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`${programme.programme}, ${programme.university}, opens the university website`}
-          >
-            <span className="person-cell">
-              <CampusMark university={programme.university} code={programme.code} tone={programme.tone} size="small" />
-              <span>
-                <strong>{programme.programme}</strong>
-                <small>
-                  {programme.university} · {programme.city}
-                </small>
+        {visible.map((programme) => {
+          const cells = (
+            <>
+              <span className="person-cell">
+                <CampusMark
+                  university={programme.university}
+                  code={programme.code}
+                  tone={programme.tone}
+                  size="small"
+                />
+                <span>
+                  <strong>{programme.programme}</strong>
+                  <small>
+                    {programme.university} · {programme.city}
+                  </small>
+                </span>
               </span>
-            </span>
-            <span>{programme.intake}</span>
-            <span>
-              <b>{programme.fee}</b>
-            </span>
-            <span>{programme.deadline}</span>
-            <span className="fresh-cell">
-              <ShieldCheck size={13} />
-              {programme.freshness}
-            </span>
-            <ExternalLink size={15} />
-          </a>
-        ))}
+              <span>{programme.intake}</span>
+              <span>
+                <b>{programme.fee}</b>
+              </span>
+              <span>{programme.deadline}</span>
+              <ProgrammeStatus programme={programme} />
+            </>
+          );
+          return isVerifier ? (
+            <div className="table-row verifier-row" key={programme.id}>
+              {cells}
+              <span className="row-actions">
+                <a
+                  href={programme.source}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open the source for ${programme.programme}`}
+                >
+                  <ExternalLink size={15} />
+                </a>
+                <button
+                  className="outline-button"
+                  onClick={() => onEdit(programme)}
+                >
+                  {programme.status === "verified" ? "Edit" : "Verify"}
+                </button>
+              </span>
+            </div>
+          ) : (
+            <a
+              className="table-row"
+              key={programme.id}
+              href={programme.source}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${programme.programme}, ${programme.university}, opens the university website`}
+            >
+              {cells}
+              <ExternalLink size={15} />
+            </a>
+          );
+        })}
         {!visible.length && (
           <div className="empty-state">
             <Search size={24} />
@@ -2783,9 +3168,7 @@ function SettingsView({
       await onSave(draft, fullName);
       onNotify("Workspace settings saved");
     } catch (error) {
-      onNotify(
-        error instanceof Error ? error.message : "Could not save settings",
-      );
+      onNotify(messageOf(error) ?? "Could not save settings");
     } finally {
       setSaving(false);
     }
@@ -2971,17 +3354,27 @@ function StudentDrawer({
   matches,
   applications,
   onClose,
-  onNotify,
+  onReview,
+  onReport,
 }: {
   student: Student;
   matches: MatchResult[];
   applications: Application[];
   onClose: () => void;
+  onReview: () => void;
+  onReport: () => void;
   onNotify: (message: string) => void;
 }) {
   const [tab, setTab] = useState("Profile");
   const closeButton = useRef<HTMLButtonElement>(null);
-  const firstName = student.name.split(" ")[0];
+  const academic = student.academic;
+  const documentStatus: Record<string, string> = {
+    pending: "Not read yet",
+    processing: "Reading…",
+    review: "Read by AI, awaiting review",
+    verified: "Reviewed",
+    failed: "Reading failed",
+  };
   useEscape(onClose);
   useEffect(() => closeButton.current?.focus(), []);
   const eligible = matches.filter(
@@ -3043,10 +3436,23 @@ function StudentDrawer({
               <div className="section-title">
                 <div>
                   <p className="eyebrow">ACADEMIC PROFILE</p>
-                  <h3>Saved information</h3>
+                  <h3>
+                    {academic.confirmedAt
+                      ? "Confirmed by counsellor"
+                      : "Not confirmed yet"}
+                  </h3>
                 </div>
-                <span className="confidence">{student.progress}% complete</span>
+                <button className="text-button" onClick={onReview}>
+                  <ShieldCheck size={14} />
+                  {academic.confirmedAt ? "Edit profile" : "Review profile"}
+                </button>
               </div>
+              {!academic.confirmedAt && (
+                <p className="drawer-hint">
+                  Read the documents with AI, check the details, and confirm
+                  before matching.
+                </p>
+              )}
               <div className="detail-grid">
                 <span>
                   <small>Degree</small>
@@ -3055,6 +3461,20 @@ function StudentDrawer({
                 <span>
                   <small>CGPA</small>
                   <strong>{student.cgpa}</strong>
+                </span>
+                <span>
+                  <small>Years of education</small>
+                  <strong>{academic.yearsOfEducation ?? "Not added"}</strong>
+                </span>
+                <span>
+                  <small>English</small>
+                  <strong>
+                    {academic.englishOverall != null
+                      ? `${academic.englishTestType ?? "Test"} ${academic.englishOverall}`
+                      : academic.mediumOfInstruction
+                        ? "Medium of instruction"
+                        : "Not added"}
+                  </strong>
                 </span>
                 <span>
                   <small>Graduation year</small>
@@ -3089,7 +3509,15 @@ function StudentDrawer({
                         }}
                       />
                     </i>
-                    <strong>{credit.ects} ECTS</strong>
+                    <strong
+                      title={
+                        credit.creditHours != null
+                          ? `${credit.creditHours} credit hours`
+                          : undefined
+                      }
+                    >
+                      {Math.round(credit.ects)} ECTS
+                    </strong>
                   </span>
                 ))}
                 {!student.credits.length && (
@@ -3114,9 +3542,14 @@ function StudentDrawer({
                     <FileText size={17} />
                     <b>{document.name}</b>
                     <small>
-                      {formatBytes(document.size)} · {document.status}
+                      {formatBytes(document.size)} ·{" "}
+                      {documentStatus[document.status] ?? document.status}
                     </small>
-                    <CheckCircle2 size={16} />
+                    {document.status === "verified" ? (
+                      <CheckCircle2 size={16} />
+                    ) : (
+                      <CircleAlert size={16} className="doc-pending" />
+                    )}
                   </span>
                 ))}
                 {!student.documents.length && (
@@ -3145,7 +3578,11 @@ function StudentDrawer({
             </div>
             {matches.slice(0, 8).map((match) => (
               <div className="drawer-match" key={match.id}>
-                <CampusMark university={match.university} code={match.logo} tone={match.tone} />
+                <CampusMark
+                  university={match.university}
+                  code={match.logo}
+                  tone={match.tone}
+                />
                 <div>
                   <strong>{match.programme}</strong>
                   <small>{match.university}</small>
@@ -3166,7 +3603,11 @@ function StudentDrawer({
           <div className="drawer-content">
             {applications.map((application) => (
               <div className="drawer-match" key={application.id}>
-                <CampusMark university={application.university} code={application.initials} tone={application.tone} />
+                <CampusMark
+                  university={application.university}
+                  code={application.initials}
+                  tone={application.tone}
+                />
                 <div>
                   <strong>{application.programme}</strong>
                   <small>
@@ -3191,24 +3632,10 @@ function StudentDrawer({
         <footer>
           <button
             className="secondary-button"
-            onClick={() => {
-              downloadCsv(
-                `${student.name.toLowerCase().replaceAll(" ", "-")}-report.csv`,
-                [
-                  ["Field", "Value"],
-                  ["Name", student.name],
-                  ["Degree", student.degree],
-                  ["CGPA", student.cgpa],
-                  ["City", student.city],
-                  ["Destination", student.target],
-                  ["Stage", student.stage],
-                  ["Profile %", student.progress],
-                ],
-              );
-              onNotify(`${firstName}’s report downloaded`);
-            }}
+            disabled={!matches.length}
+            onClick={onReport}
           >
-            <Download size={16} /> Report
+            <FileText size={16} /> Shortlist report
           </button>
           {tab !== "Matches" && (
             <button
@@ -3298,11 +3725,7 @@ function NewStudentWizard({
         files,
       });
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Could not save the student.",
-      );
+      setError(messageOf(submitError) ?? "Could not save the student.");
       setSubmitting(false);
     }
   };

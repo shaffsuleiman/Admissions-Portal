@@ -33,9 +33,9 @@ alter table public.programmes
 create index programmes_university_id_idx on public.programmes(university_id);
 
 insert into public.universities (
-  slug, name, region, institution_type, is_telematic, mur_source_url
+  slug, name, region, institution_type, is_telematic, mur_source_url, directory_verified_at
 )
-select slug, name, region, institution_type, is_telematic, mur_source_url
+select slug, name, region, institution_type, is_telematic, mur_source_url, checked_at
 from (values
   ('torino', 'Università degli studi di Torino', 'Piemonte', 'Statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-statali/torino'),
   ('torino-politecnico', 'Politecnico di Torino', 'Piemonte', 'Statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-statali/torino-politecnico'),
@@ -136,7 +136,7 @@ from (values
   ('enna-kore', 'Libera Università della Sicilia Centrale "KORE" di Enna', 'Sicilia', 'Non statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-non-statali/enna-kore'),
   ('catania', 'Università degli Studi di Catania', 'Sicilia', 'Statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-statali/catania'),
   ('sassari', 'Università degli Studi di Sassari', 'Sardegna', 'Statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-statali/sassari'),
-  ('cagliari', 'Università degli Studi di Cagliari', 'Sardegna', 'Statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-statali/cagliari');
+  ('cagliari', 'Università degli Studi di Cagliari', 'Sardegna', 'Statale', false, 'https://ustat.mur.gov.it/dati/didattica/italia/atenei-statali/cagliari')
 ) as official_directory(slug, name, region, institution_type, is_telematic, mur_source_url)
 cross join lateral (select '2026-09-23T00:00:00Z'::timestamptz as checked_at) verification
 on conflict (slug) do update set

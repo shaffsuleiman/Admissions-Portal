@@ -1,4 +1,14 @@
 import { createClient } from "@/lib/supabase/client";
+import type { ProgrammeDraft, TranscriptExtraction } from "@/lib/ai/schemas";
+import {
+  DEFAULT_CONVERSION,
+  evaluate,
+  normalizeRules,
+  serializeRules,
+  type Check,
+  type Conversion,
+  type ProgrammeRules,
+} from "@/lib/matching/engine";
 
 export type Workspace = {
   id: string;
@@ -25,13 +35,34 @@ export type StudentDocument = {
   name: string;
   status: string;
   size: number;
+  type: string;
+  mimeType: string;
+  extraction: TranscriptExtraction | null;
+  confidence: number | null;
 };
 
 export type SubjectCredit = {
   id: string;
   area: string;
   ects: number;
+  creditHours: number | null;
+  courses: { title: string; creditHours: number | null; grade: string }[];
   confirmed: boolean;
+};
+
+/** The confirmed academic facts the eligibility engine reads. */
+export type AcademicFacts = {
+  degreeTitle: string;
+  institution: string;
+  graduationYear: number | null;
+  yearsOfEducation: number | null;
+  cgpa: number | null;
+  cgpaScale: number | null;
+  totalCreditHours: number | null;
+  englishTestType: string | null;
+  englishOverall: number | null;
+  mediumOfInstruction: boolean;
+  confirmedAt: string | null;
 };
 
 export type Student = {
@@ -56,6 +87,7 @@ export type Student = {
   confidence: number | null;
   documents: StudentDocument[];
   credits: SubjectCredit[];
+  academic: AcademicFacts;
 };
 
 export type Programme = {
@@ -75,6 +107,25 @@ export type Programme = {
   tone: string;
   source: string;
   language: string;
+  universityId: string | null;
+  degreeLevel: string;
+  applicationUrl: string;
+  academicYear: string;
+  verifiedAt: string | null;
+  notes: string;
+  rules: ProgrammeRules;
+};
+
+export type University = {
+  id: string;
+  slug: string;
+  name: string;
+  region: string;
+  institutionType: "Statale" | "Non statale";
+  isTelematic: boolean;
+  source: string;
+  verifiedAt: string;
+  conversion: Conversion;
 };
 
 export type MatchResult = {
@@ -92,6 +143,9 @@ export type MatchResult = {
   logo: string;
   tone: string;
   reasons: string[];
+  checks: Check[];
+  programmeVerified: boolean;
+  source: string;
   generatedAt: string;
 };
 
@@ -128,6 +182,9 @@ export type WorkspaceData = {
   matches: MatchResult[];
   applications: Application[];
   deadlines: DeadlineItem[];
+  /** Platform verifiers can publish programme rules. */
+  isVerifier: boolean;
+  universities: University[];
 };
 
 export type NewStudentInput = {
@@ -146,6 +203,19 @@ export type NewStudentInput = {
   consent: boolean;
   files: File[];
 };
+
+/** Supabase errors are plain objects, not Error instances; read the message from either. */
+export function messageOf(error: unknown): string | null {
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message
+  )
+    return error.message;
+  return null;
+}
 
 const tones = ["blue", "violet", "orange", "pink", "green", "cyan"];
 const statusLabels: Record<string, string> = {
@@ -288,6 +358,39 @@ function mapProgramme(row: Record<string, unknown>): Programme {
     tone: toneFor(String(row.id)),
     source: String(row.source_url ?? "#"),
     language: String(row.teaching_language ?? "English"),
+    universityId:
+      typeof row.university_id === "string" ? row.university_id : null,
+    degreeLevel: String(row.degree_level ?? "master"),
+    applicationUrl: String(row.application_url ?? ""),
+    academicYear: String(row.academic_year ?? ""),
+    verifiedAt,
+    notes: String(row.verification_notes ?? ""),
+    rules: normalizeRules(row.requirements),
+  };
+}
+
+const numberOrNull = (value: unknown) =>
+  value == null || value === "" || Number.isNaN(Number(value))
+    ? null
+    : Number(value);
+
+function mapAcademic(academic: Record<string, unknown> | null): AcademicFacts {
+  return {
+    degreeTitle: String(academic?.degree_title ?? ""),
+    institution: String(academic?.institution ?? ""),
+    graduationYear: numberOrNull(academic?.graduation_year),
+    yearsOfEducation: numberOrNull(academic?.years_of_education),
+    cgpa: numberOrNull(academic?.cgpa),
+    cgpaScale: numberOrNull(academic?.cgpa_scale),
+    totalCreditHours: numberOrNull(academic?.total_credit_hours),
+    englishTestType:
+      typeof academic?.english_test_type === "string"
+        ? academic.english_test_type
+        : null,
+    englishOverall: numberOrNull(academic?.english_overall),
+    mediumOfInstruction: Boolean(academic?.medium_of_instruction),
+    confirmedAt:
+      typeof academic?.confirmed_at === "string" ? academic.confirmed_at : null,
   };
 }
 
@@ -459,13 +562,29 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
         name: String(document.file_name),
         status: String(document.extraction_status),
         size: Number(document.size_bytes ?? 0),
+        type: String(document.document_type ?? "other"),
+        mimeType: String(document.mime_type ?? ""),
+        extraction:
+          document.extracted_data &&
+          typeof document.extracted_data === "object" &&
+          Object.keys(document.extracted_data).length
+            ? (document.extracted_data as TranscriptExtraction)
+            : null,
+        confidence: numberOrNull(document.extraction_confidence),
       })),
       credits: credits.map((credit) => ({
         id: String(credit.id),
         area: String(credit.subject_area),
         ects: Number(credit.ects ?? 0),
+        creditHours: numberOrNull(credit.local_credits),
+        courses: asArray(credit.source_courses).map((course) => ({
+          title: String(course.title ?? ""),
+          creditHours: numberOrNull(course.credit_hours),
+          grade: String(course.grade ?? ""),
+        })),
         confirmed: Boolean(credit.confirmed),
       })),
+      academic: mapAcademic(academic),
     };
   });
 
@@ -506,6 +625,9 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
       logo: programmeCode(university),
       tone: toneFor(String(row.programme_id)),
       reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
+      checks: Array.isArray(row.checks) ? (row.checks as Check[]) : [],
+      programmeVerified: programme.verification_status === "verified",
+      source: String(programme.source_url ?? ""),
       generatedAt: String(row.generated_at ?? ""),
     };
   });
@@ -573,7 +695,19 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
     tone: toneFor(user.id),
   };
 
+  // Verifier access and university conversions arrive with migration 0004;
+  // until it is applied these reads fail quietly and the workspace still loads.
+  const { data: verifierRow } = await supabase
+    .from("platform_admins")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const isVerifier = Boolean(verifierRow);
+  const universities = await loadUniversities();
+
   return {
+    isVerifier,
+    universities,
     workspace: {
       id: workspaceRow.id,
       name: workspaceRow.name,
@@ -789,129 +923,128 @@ export async function createApplicationFromMatch(
   return application.id;
 }
 
+const conversionFrom = (
+  row: Record<string, unknown> | null | undefined,
+): Conversion => ({
+  ectsPerCreditHour:
+    numberOrNull(row?.ects_per_credit_hour) ??
+    DEFAULT_CONVERSION.ectsPerCreditHour,
+  passRatio:
+    numberOrNull(row?.grade_pass_ratio) ?? DEFAULT_CONVERSION.passRatio,
+});
+
+export async function loadUniversities(): Promise<University[]> {
+  const { data, error } = await createClient()
+    .from("universities")
+    .select(
+      "id, slug, name, region, institution_type, is_telematic, mur_source_url, directory_verified_at, ects_per_credit_hour, grade_pass_ratio",
+    )
+    .order("name");
+  if (error) return [];
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    slug: String(row.slug),
+    name: String(row.name),
+    region: String(row.region ?? ""),
+    institutionType:
+      row.institution_type === "Non statale" ? "Non statale" : "Statale",
+    isTelematic: Boolean(row.is_telematic),
+    source: String(row.mur_source_url ?? ""),
+    verifiedAt: String(row.directory_verified_at ?? ""),
+    conversion: conversionFrom(row),
+  }));
+}
+
+// Runs the deterministic engine for one student against every published programme.
+// Only counsellor-confirmed facts are used; unverified programmes are flagged, never final.
 export async function runStudentMatch(workspaceId: string, studentId: string) {
   const supabase = createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user)
     throw new Error("Your session expired. Please sign in again.");
-  const [academicResult, creditsResult, programmesResult] = await Promise.all([
-    supabase
-      .from("academic_profiles")
-      .select("*")
-      .eq("student_id", studentId)
-      .maybeSingle(),
-    supabase
-      .from("subject_credits")
-      .select("subject_area, ects")
-      .eq("student_id", studentId),
-    supabase
-      .from("programmes")
-      .select("id, programme_name, requirements")
-      .eq("verification_status", "verified"),
-  ]);
+  const [academicResult, creditsResult, programmesResult, universitiesResult] =
+    await Promise.all([
+      supabase
+        .from("academic_profiles")
+        .select("*")
+        .eq("student_id", studentId)
+        .maybeSingle(),
+      supabase
+        .from("subject_credits")
+        .select("subject_area, ects, local_credits, confirmed")
+        .eq("student_id", studentId),
+      supabase
+        .from("programmes")
+        .select(
+          "id, university_id, requirements, application_deadline, verification_status",
+        )
+        .in("verification_status", ["verified", "unverified", "in_review"]),
+      supabase
+        .from("universities")
+        .select("id, ects_per_credit_hour, grade_pass_ratio"),
+    ]);
   if (academicResult.error) throw academicResult.error;
   if (creditsResult.error) throw creditsResult.error;
   if (programmesResult.error) throw programmesResult.error;
-  if (!academicResult.data)
+  const academic = academicResult.data;
+  if (!academic)
     throw new Error(
       "Add the student’s academic profile before running a match.",
     );
+  if (!academic.confirmed_at)
+    throw new Error(
+      "Review and confirm the student’s academic profile before matching.",
+    );
   if (!programmesResult.data?.length)
-    throw new Error("No verified programmes are available to match.");
+    throw new Error("No programmes are published yet.");
 
-  const academic = academicResult.data;
-  const creditMap = new Map(
-    (creditsResult.data ?? []).map((credit) => [
-      String(credit.subject_area).toLowerCase(),
-      Number(credit.ects),
-    ]),
+  const conversions = new Map(
+    (universitiesResult.error ? [] : (universitiesResult.data ?? [])).map(
+      (row) => [String(row.id), conversionFrom(row)],
+    ),
   );
-  const cgpa = Number(academic.cgpa ?? 0);
-  const scale = Number(academic.cgpa_scale ?? 4);
-  const normalizedCgpa = scale > 0 ? (cgpa / scale) * 4 : 0;
-  const english = Number(academic.english_overall ?? 0);
-  const rows = programmesResult.data.map((programme) => {
-    const requirements =
-      programme.requirements && typeof programme.requirements === "object"
-        ? (programme.requirements as Record<string, unknown>)
-        : {};
-    const minimumCgpa = Number(requirements.minimum_cgpa ?? 0);
-    const mathRequired = Number(requirements.math_ects ?? 0);
-    const csRequired = Number(requirements.cs_ects ?? 0);
-    const englishRequired = Number(requirements.english_ielts ?? 0);
-    const mathActual =
-      creditMap.get("mathematics") ?? creditMap.get("math") ?? 0;
-    const csActual =
-      creditMap.get("computer science") ?? creditMap.get("cs") ?? 0;
-    const reasons: string[] = [];
-    let score = 100;
-    let hardFailure = false;
+  const facts = mapAcademic(academic);
+  const student = {
+    yearsOfEducation: facts.yearsOfEducation,
+    cgpa: facts.cgpa,
+    cgpaScale: facts.cgpaScale,
+    englishTest:
+      facts.englishOverall != null &&
+      facts.englishTestType &&
+      facts.englishTestType !== "None"
+        ? { type: facts.englishTestType, score: facts.englishOverall }
+        : null,
+    mediumOfInstruction: facts.mediumOfInstruction,
+    credits: (creditsResult.data ?? [])
+      .filter((credit) => credit.confirmed)
+      .map((credit) => ({
+        area: String(credit.subject_area),
+        creditHours: numberOrNull(credit.local_credits),
+        ects: numberOrNull(credit.ects),
+      })),
+  };
 
-    if (minimumCgpa) {
-      if (normalizedCgpa >= minimumCgpa)
-        reasons.push(
-          `CGPA ${normalizedCgpa.toFixed(2)} meets ${minimumCgpa.toFixed(2)}`,
-        );
-      else {
-        score -= Math.min(35, (minimumCgpa - normalizedCgpa) * 30);
-        hardFailure = normalizedCgpa < minimumCgpa - 0.35;
-        reasons.push(
-          `CGPA ${normalizedCgpa.toFixed(2)} below ${minimumCgpa.toFixed(2)}`,
-        );
-      }
-    }
-    if (mathRequired) {
-      if (mathActual >= mathRequired)
-        reasons.push(`Math credits: ${mathActual} / ${mathRequired} ECTS`);
-      else {
-        score -= Math.min(30, (mathRequired - mathActual) * 1.5);
-        hardFailure ||= mathActual < mathRequired * 0.65;
-        reasons.push(`Math credits: ${mathActual} / ${mathRequired} ECTS`);
-      }
-    }
-    if (csRequired) {
-      if (csActual >= csRequired)
-        reasons.push(`CS credits: ${csActual} / ${csRequired} ECTS`);
-      else {
-        score -= Math.min(30, csRequired - csActual);
-        hardFailure ||= csActual < csRequired * 0.65;
-        reasons.push(`CS credits: ${csActual} / ${csRequired} ECTS`);
-      }
-    }
-    if (englishRequired) {
-      if (english >= englishRequired || academic.medium_of_instruction)
-        reasons.push(
-          academic.medium_of_instruction
-            ? "English medium of instruction recorded"
-            : `IELTS ${english.toFixed(1)} meets ${englishRequired.toFixed(1)}`,
-        );
-      else {
-        score -= 20;
-        reasons.push(
-          `English result below IELTS ${englishRequired.toFixed(1)}`,
-        );
-      }
-    }
-    if (!reasons.length)
-      reasons.push("General academic profile requirements met");
-    score = Math.max(0, Math.min(100, Math.round(score)));
-    const result =
-      hardFailure || score < 65
-        ? "not_eligible"
-        : score < 85
-          ? "borderline"
-          : "eligible";
+  const rows = programmesResult.data.map((programme) => {
+    const rules = normalizeRules(programme.requirements);
+    const conversion =
+      conversions.get(String(programme.university_id)) ?? DEFAULT_CONVERSION;
+    const evaluation = evaluate(student, rules, {
+      conversion,
+      deadline: programme.application_deadline,
+    });
     return {
       workspace_id: workspaceId,
       student_id: studentId,
       programme_id: programme.id,
-      result,
-      score,
-      reasons,
+      result: evaluation.result,
+      score: evaluation.score,
+      reasons: evaluation.checks.map((check) => check.detail),
+      checks: evaluation.checks,
       rules_snapshot: {
-        requirements,
-        academic: { cgpa: normalizedCgpa, english },
-        credits: Object.fromEntries(creditMap),
+        rules: serializeRules(rules),
+        conversion,
+        verification_status: programme.verification_status,
+        student,
       },
       generated_at: new Date().toISOString(),
     };
@@ -935,6 +1068,216 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     metadata: { programme_count: rows.length },
   });
   return rows.length;
+}
+
+/** Asks the server to read one uploaded document with AI. Nothing is confirmed until review. */
+export async function extractDocument(
+  documentId: string,
+): Promise<TranscriptExtraction> {
+  const response = await fetch(`/api/documents/${documentId}/extract`, {
+    method: "POST",
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    extraction?: TranscriptExtraction;
+    error?: string;
+  };
+  if (!response.ok || !body.extraction)
+    throw new Error(body.error ?? "Reading the document failed.");
+  return body.extraction;
+}
+
+export type ConfirmedProfileInput = Omit<AcademicFacts, "confirmedAt"> & {
+  credits: {
+    area: string;
+    creditHours: number | null;
+    ects: number | null;
+    courses: { title: string; creditHours: number | null; grade: string }[];
+  }[];
+  reviewedDocumentIds: string[];
+};
+
+/** Saves the counsellor-reviewed academic profile and subject credits. */
+export async function saveConfirmedProfile(
+  workspaceId: string,
+  studentId: string,
+  input: ConfirmedProfileInput,
+) {
+  const supabase = createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user)
+    throw new Error("Your session expired. Please sign in again.");
+  const now = new Date().toISOString();
+
+  const { error: academicError } = await supabase
+    .from("academic_profiles")
+    .upsert(
+      {
+        student_id: studentId,
+        workspace_id: workspaceId,
+        degree_title: input.degreeTitle.trim() || null,
+        institution: input.institution.trim() || null,
+        graduation_year: input.graduationYear,
+        years_of_education: input.yearsOfEducation,
+        cgpa: input.cgpa,
+        cgpa_scale: input.cgpaScale,
+        total_credit_hours: input.totalCreditHours,
+        english_test_type: input.englishTestType,
+        english_overall: input.englishOverall,
+        medium_of_instruction: input.mediumOfInstruction,
+        confirmed_at: now,
+        confirmed_by: authData.user.id,
+      },
+      { onConflict: "student_id" },
+    );
+  if (academicError) throw academicError;
+
+  // One row per subject area: replace whatever was there with the reviewed totals.
+  const { error: deleteError } = await supabase
+    .from("subject_credits")
+    .delete()
+    .eq("student_id", studentId);
+  if (deleteError) throw deleteError;
+  const creditRows = input.credits
+    .filter(
+      (credit) =>
+        credit.area &&
+        ((credit.creditHours ?? 0) > 0 || (credit.ects ?? 0) > 0),
+    )
+    .map((credit) => ({
+      workspace_id: workspaceId,
+      student_id: studentId,
+      subject_area: credit.area,
+      local_credits: credit.creditHours,
+      ects:
+        credit.ects ??
+        Math.round(
+          (credit.creditHours ?? 0) * DEFAULT_CONVERSION.ectsPerCreditHour * 10,
+        ) / 10,
+      source_courses: credit.courses.map((course) => ({
+        title: course.title,
+        credit_hours: course.creditHours,
+        grade: course.grade,
+      })),
+      confirmed: true,
+    }));
+  if (creditRows.length) {
+    const { error: creditsError } = await supabase
+      .from("subject_credits")
+      .insert(creditRows);
+    if (creditsError) throw creditsError;
+  }
+
+  if (input.reviewedDocumentIds.length) {
+    const { error: documentsError } = await supabase
+      .from("documents")
+      .update({
+        extraction_status: "verified",
+        verified_at: now,
+        verified_by: authData.user.id,
+      })
+      .in("id", input.reviewedDocumentIds);
+    if (documentsError) throw documentsError;
+  }
+  await supabase
+    .from("students")
+    .update({ status: "needs_review" })
+    .eq("id", studentId)
+    .eq("status", "profile_processing");
+  await supabase.from("activity_logs").insert({
+    workspace_id: workspaceId,
+    actor_id: authData.user.id,
+    action: "profile.confirmed",
+    entity_type: "student",
+    entity_id: studentId,
+    metadata: { subject_areas: creditRows.length },
+  });
+}
+
+/** Verifier tool: AI drafts rules from an admissions call; nothing is saved here. */
+export async function draftProgrammeRules(source: {
+  sourceUrl?: string;
+  text?: string;
+}): Promise<ProgrammeDraft> {
+  const response = await fetch("/api/programmes/draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(source),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    draft?: ProgrammeDraft;
+    error?: string;
+  };
+  if (!response.ok || !body.draft)
+    throw new Error(body.error ?? "Drafting failed.");
+  return body.draft;
+}
+
+export type ProgrammeInput = {
+  id?: string;
+  universityId: string | null;
+  university: string;
+  programme: string;
+  city: string;
+  degreeLevel: string;
+  language: string;
+  feeValue: number | null;
+  intake: string;
+  deadlineIso: string | null;
+  applicationUrl: string;
+  source: string;
+  academicYear: string;
+  notes: string;
+  rules: ProgrammeRules;
+  status: "unverified" | "in_review" | "verified";
+};
+
+/** Verifier tool: saves a programme. Marking it verified stamps who checked it and when. */
+export async function saveProgramme(input: ProgrammeInput) {
+  const supabase = createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user)
+    throw new Error("Your session expired. Please sign in again.");
+  if (!input.source.trim())
+    throw new Error("Add the source link you checked the rules against.");
+  const row = {
+    university_id: input.universityId,
+    university_name: input.university.trim(),
+    programme_name: input.programme.trim(),
+    country_code: "IT",
+    city: input.city.trim() || null,
+    degree_level: input.degreeLevel,
+    teaching_language: input.language.trim() || "English",
+    annual_tuition_eur: input.feeValue,
+    intake: input.intake.trim() || null,
+    application_deadline: input.deadlineIso || null,
+    application_url: input.applicationUrl.trim() || null,
+    source_url: input.source.trim(),
+    academic_year: input.academicYear.trim(),
+    requirements: serializeRules(input.rules),
+    verification_notes: input.notes.trim() || null,
+    verification_status: input.status,
+    verified_at: input.status === "verified" ? new Date().toISOString() : null,
+    verified_by: input.status === "verified" ? authData.user.id : null,
+  };
+  const { error } = input.id
+    ? await supabase.from("programmes").update(row).eq("id", input.id)
+    : await supabase.from("programmes").insert(row);
+  if (error) throw error;
+}
+
+/** Verifier tool: per-university conversion rules used by every programme there. */
+export async function saveUniversityConversion(
+  universityId: string,
+  conversion: Conversion,
+) {
+  const { error } = await createClient()
+    .from("universities")
+    .update({
+      ects_per_credit_hour: conversion.ectsPerCreditHour,
+      grade_pass_ratio: conversion.passRatio,
+    })
+    .eq("id", universityId);
+  if (error) throw error;
 }
 
 export async function updateWorkspaceProfile(
