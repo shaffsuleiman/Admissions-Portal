@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\""
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\"",
+    "catalogue:crawl": ".venv/bin/python scripts/catalogue/crawl.py",
+    "catalogue:test": ".venv/bin/python -m unittest discover -s scripts/catalogue -p 'test_*.py'"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
