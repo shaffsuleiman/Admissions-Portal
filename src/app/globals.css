@@ -3001,6 +3001,137 @@ a:focus-visible {
   justify-content: center;
   padding: 20px;
 }
+.onboarding-backdrop {
+  backdrop-filter: blur(8px);
+  background: #30141e70;
+  z-index: 90;
+}
+.onboarding-card {
+  background: white;
+  border: 1px solid #eadde2;
+  border-radius: 24px;
+  box-shadow: 0 34px 100px #30141e52;
+  max-width: 680px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+.onboarding-close {
+  align-items: center;
+  background: #ffffffc7;
+  border: 1px solid #eadde2;
+  border-radius: 50%;
+  color: var(--muted);
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: 34px;
+  z-index: 2;
+}
+.onboarding-visual {
+  align-items: center;
+  background:
+    radial-gradient(circle at 26% 35%, #ffffffb8 0 5%, transparent 6%),
+    linear-gradient(135deg, #f8e7ee, #fff0e4 52%, #e8e4fa);
+  display: flex;
+  height: 190px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+.onboarding-icon {
+  align-items: center;
+  background: white;
+  border: 1px solid #efdce4;
+  border-radius: 22px;
+  box-shadow: 0 18px 42px #8a2c5230;
+  color: var(--blue);
+  display: flex;
+  height: 78px;
+  justify-content: center;
+  position: relative;
+  width: 78px;
+  z-index: 1;
+}
+.onboarding-orbit {
+  border: 1px solid #b53a6c2b;
+  border-radius: 50%;
+  position: absolute;
+}
+.onboarding-orbit.orbit-one {
+  height: 130px;
+  transform: rotate(12deg);
+  width: 260px;
+}
+.onboarding-orbit.orbit-two {
+  height: 245px;
+  transform: rotate(-15deg);
+  width: 420px;
+}
+.onboarding-copy {
+  padding: 30px 36px 24px;
+}
+.onboarding-copy h2 {
+  font-size: 28px;
+  letter-spacing: -1px;
+  margin: 7px 0 10px;
+}
+.onboarding-copy > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+  max-width: 570px;
+}
+.onboarding-tip {
+  align-items: center;
+  background: #faf1f4;
+  border: 1px solid #efdce4;
+  border-radius: 10px;
+  color: #7d2a48;
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 9px;
+  margin-top: 22px;
+  padding: 12px 14px;
+}
+.onboarding-card footer {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 36px;
+}
+.onboarding-dots {
+  display: flex;
+  gap: 7px;
+}
+.onboarding-dots button {
+  background: #dfd2d7;
+  border: 0;
+  border-radius: 99px;
+  height: 7px;
+  padding: 0;
+  transition: width 0.2s ease, background 0.2s ease;
+  width: 7px;
+}
+.onboarding-dots button.active {
+  background: var(--blue);
+  width: 24px;
+}
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+}
+.onboarding-actions .primary-button {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
 .wizard {
   background: white;
   border-radius: 15px;

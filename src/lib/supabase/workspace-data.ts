@@ -204,6 +204,7 @@ export type WorkspaceData = {
   /** Platform verifiers can publish programme rules. */
   isVerifier: boolean;
   universities: University[];
+  onboardingComplete: boolean;
 };
 
 export type NewStudentInput = {
@@ -530,7 +531,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   const { data: profiles, error: profilesError } = memberIds.length
     ? await supabase
         .from("profiles")
-        .select("id, full_name, phone")
+        .select("id, full_name, phone, onboarding_completed_at")
         .in("id", memberIds)
     : { data: [], error: null };
   if (profilesError) throw profilesError;
@@ -774,6 +775,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   return {
     isVerifier,
     universities,
+    onboardingComplete: Boolean(currentProfile?.onboarding_completed_at),
     workspace: {
       id: workspaceRow.id,
       name: workspaceRow.name,
@@ -793,6 +795,18 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
     applications,
     deadlines,
   };
+}
+
+export async function completeOnboarding() {
+  const supabase = createClient();
+  const { data, error: authError } = await supabase.auth.getUser();
+  if (authError || !data.user)
+    throw new Error("Your session expired. Please sign in again.");
+  const { error } = await supabase
+    .from("profiles")
+    .update({ onboarding_completed_at: new Date().toISOString() })
+    .eq("id", data.user.id);
+  if (error) throw error;
 }
 
 function documentType(file: File) {

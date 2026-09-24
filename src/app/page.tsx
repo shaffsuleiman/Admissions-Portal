@@ -25,6 +25,7 @@ import { hasEligibilityRules } from "@/lib/matching/engine";
 import {
   createApplicationFromMatch,
   aiReviewProgramme,
+  completeOnboarding,
   createDeadline,
   deleteStudent,
   messageOf,
@@ -630,6 +631,108 @@ function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void;
   );
 }
 
+const quickStartSteps = [
+  {
+    icon: UserPlus,
+    eyebrow: "STEP 1 OF 4",
+    title: "Add your first student",
+    text: "Create a profile with their target intake and budget. You can upload all available documents in the same flow.",
+    detail: "Students → Add student",
+  },
+  {
+    icon: Sparkles,
+    eyebrow: "STEP 2 OF 4",
+    title: "Let AI read the documents",
+    text: "Eligify reads the uploaded files together and drafts CGPA, education length, English results and subject credits.",
+    detail: "Use Read all with AI, then check the extracted facts",
+  },
+  {
+    icon: CheckCircle2,
+    eyebrow: "STEP 3 OF 4",
+    title: "Confirm once, match automatically",
+    text: "Confirming the academic profile runs the deterministic matcher against every evidence-backed programme rule.",
+    detail: "Green, amber and red checks explain every result",
+  },
+  {
+    icon: FileCheck2,
+    eyebrow: "STEP 4 OF 4",
+    title: "Turn a match into an application",
+    text: "Shortlist a suitable programme, start the application and track university, document and visa deadlines.",
+    detail: "Matches → Start application → Calendar",
+  },
+] as const;
+
+function QuickStartTutorial({
+  onClose,
+  onStart,
+}: {
+  onClose: () => Promise<void>;
+  onStart: () => Promise<void>;
+}) {
+  const [step, setStep] = useState(0);
+  const current = quickStartSteps[step];
+  const Icon = current.icon;
+  const last = step === quickStartSteps.length - 1;
+  useEscape(() => void onClose());
+
+  return (
+    <div className="modal-backdrop onboarding-backdrop" role="presentation">
+      <section
+        className="onboarding-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-start-title"
+      >
+        <button
+          className="onboarding-close"
+          onClick={() => void onClose()}
+          aria-label="Skip quick start"
+        >
+          <X size={18} />
+        </button>
+        <div className="onboarding-visual">
+          <span className="onboarding-icon"><Icon size={32} /></span>
+          <div className="onboarding-orbit orbit-one" />
+          <div className="onboarding-orbit orbit-two" />
+        </div>
+        <div className="onboarding-copy">
+          <p className="eyebrow">{current.eyebrow}</p>
+          <h2 id="quick-start-title">{current.title}</h2>
+          <p>{current.text}</p>
+          <div className="onboarding-tip">
+            <Zap size={15} /> <span>{current.detail}</span>
+          </div>
+        </div>
+        <footer>
+          <div className="onboarding-dots" aria-label={`Step ${step + 1} of ${quickStartSteps.length}`}>
+            {quickStartSteps.map((item, index) => (
+              <button
+                key={item.title}
+                className={index === step ? "active" : ""}
+                onClick={() => setStep(index)}
+                aria-label={`Go to step ${index + 1}`}
+              />
+            ))}
+          </div>
+          <div className="onboarding-actions">
+            {step > 0 && (
+              <button className="secondary-button" onClick={() => setStep(step - 1)}>
+                Back
+              </button>
+            )}
+            <button
+              className="primary-button"
+              onClick={() => last ? void onStart() : setStep(step + 1)}
+            >
+              {last ? "Add first student" : "Next"} <ArrowRight size={15} />
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function AppShell({ onLogout }: { onLogout: () => void }) {
   const [view, setView] = useState<View>("Overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -649,6 +752,8 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   const [editingProgramme, setEditingProgramme] = useState<
     Programme | "new" | null
   >(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const tutorialPrompted = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const searchInput = useRef<HTMLInputElement>(null);
 
@@ -680,6 +785,13 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (data && !data.onboardingComplete && !tutorialPrompted.current) {
+      tutorialPrompted.current = true;
+      setTutorialOpen(true);
+    }
+  }, [data]);
 
   const notify = (message: string) => {
     setToast(message);
@@ -893,7 +1005,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               />
               <kbd>⌘ K</kbd>
             </form>
-            <button className="icon-button" aria-label="Help">
+            <button
+              className="icon-button"
+              aria-label="Open quick-start tutorial"
+              onClick={() => setTutorialOpen(true)}
+            >
               <CircleHelp size={18} />
             </button>
             <button
@@ -1039,6 +1155,38 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             if (input.files.length) {
               setAutoReadStudentId(studentId);
               setReviewStudentId(studentId);
+            }
+          }}
+        />
+      )}
+      {tutorialOpen && (
+        <QuickStartTutorial
+          onClose={async () => {
+            setTutorialOpen(false);
+            if (!data.onboardingComplete) {
+              try {
+                await completeOnboarding();
+                setData((current) =>
+                  current ? { ...current, onboardingComplete: true } : current,
+                );
+              } catch (error) {
+                notify(messageOf(error) ?? "Could not save tutorial progress");
+              }
+            }
+          }}
+          onStart={async () => {
+            setTutorialOpen(false);
+            setView("Students");
+            setNewStudent(true);
+            if (!data.onboardingComplete) {
+              try {
+                await completeOnboarding();
+                setData((current) =>
+                  current ? { ...current, onboardingComplete: true } : current,
+                );
+              } catch (error) {
+                notify(messageOf(error) ?? "Could not save tutorial progress");
+              }
             }
           }}
         />
