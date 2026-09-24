@@ -1,7 +1,8 @@
 # Official catalogue crawler
 
 This pipeline discovers English-taught programmes from official University of
-Bologna, Sapienza University of Rome, and University of Padua catalogues. It
+Bologna, Sapienza University of Rome, University of Padua, Politecnico di
+Torino, Politecnico di Milano, and University of Pisa catalogues. It
 normalizes and deduplicates the records, stores a reviewable JSON snapshot, and
 can generate an idempotent Supabase migration.
 
@@ -26,3 +27,6 @@ For a reproducible run against saved HTML:
 
 Review `data/catalogue/latest-diff.json` before applying generated SQL. A removed
 record is reported but never deleted automatically.
+
+Use `--previous path/to/snapshot.json` when comparing against a snapshot other
+than the output file, such as the last deployed catalogue.

@@ -1,6 +1,14 @@
 import unittest
 
-from crawl import calculate_diff, parse_bologna_second, parse_padua_combined, parse_sapienza
+from crawl import (
+    calculate_diff,
+    parse_bologna_second,
+    parse_padua_combined,
+    parse_pisa,
+    parse_polimi_master,
+    parse_polito_bachelor,
+    parse_sapienza,
+)
 
 
 class CatalogueParserTests(unittest.TestCase):
@@ -41,9 +49,45 @@ class CatalogueParserTests(unittest.TestCase):
         self.assertEqual([item.degree_level for item in result], ["Bachelor", "Single-cycle"])
 
     def test_diff_detects_changed_hash(self):
-        old = [{"university_slug": "u", "programme_name": "P", "official_programme_code": None, "academic_year": "2026/27", "content_hash": "a"}]
-        new = [{"university_slug": "u", "programme_name": "P", "official_programme_code": None, "academic_year": "2026/27", "content_hash": "b"}]
+        old = [{"university_slug": "u", "programme_name": "P", "degree_level": "Master", "official_programme_code": None, "academic_year": "2026/27", "content_hash": "a"}]
+        new = [{"university_slug": "u", "programme_name": "P", "degree_level": "Master", "official_programme_code": None, "academic_year": "2026/27", "content_hash": "b"}]
         self.assertEqual(calculate_diff(old, new)["summary"], {"added": 0, "changed": 1, "removed": 0})
+
+    def test_polito_uses_language_attribute(self):
+        html = """
+        <article class="pol-courses--list-item" data-course-languages="IT EN">
+          <div class="pol-course-title"><a href="/architecture">Architecture</a></div>
+          <div class="pol-course-data--site"><dd>Turin</dd></div>
+        </article>
+        <article class="pol-courses--list-item" data-course-languages="IT">
+          <div class="pol-course-title"><a href="/italian">Italian only</a></div>
+        </article>
+        """
+        result = parse_polito_bachelor(html, "https://example.edu/catalogue")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].programme_name, "Architecture")
+
+    def test_polimi_extracts_title_campuses_and_english(self):
+        html = """
+        <a class="link" href="/programme/data">
+          <div class="localised-title-title"><p>Data Science</p></div>
+          <span class="campusName">Milano Leonardo</span><span class="campusName">Cremona</span>
+          <li class="info-label--internet"><span>ITA-ENG</span></li>
+        </a>
+        """
+        result = parse_polimi_master(html, "https://example.edu/catalogue")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].city, "Milano Leonardo, Cremona")
+
+    def test_pisa_dedupes_cross_category_programme_by_code(self):
+        html = """
+        <p><a href="/master/cybersecurity">Master in Cybersecurity</a> (<a href="#">WCY-LM</a>)</p>
+        <p><a href="/master/cybersecurity">Master in Cybersecurity</a> (<a href="#">WCY-LM</a>)</p>
+        <p><a href="/bachelor/humanities">Bachelor’s Degree – International Humanities</a></p>
+        """
+        result = parse_pisa(html, "https://example.edu/catalogue")
+        self.assertEqual(result[0].official_programme_code, "WCY-LM")
+        self.assertEqual(result[-1].degree_level, "Bachelor")
 
 
 if __name__ == "__main__":

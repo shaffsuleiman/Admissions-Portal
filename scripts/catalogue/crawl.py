@@ -46,7 +46,7 @@ class Programme:
 
     @property
     def identity(self) -> str:
-        identifier = self.official_programme_code or normalize_key(self.programme_name)
+        identifier = self.official_programme_code or f"{normalize_key(self.programme_name)}:{normalize_key(self.degree_level)}"
         return f"{self.university_slug}:{identifier}:{self.academic_year}"
 
     def serialized(self) -> dict[str, object]:
@@ -239,6 +239,113 @@ def parse_padua_master(html: str, catalogue_url: str) -> list[Programme]:
     return padua_links(main, catalogue_url, "Master")
 
 
+def parse_polito(html: str, catalogue_url: str, level: str) -> list[Programme]:
+    soup = BeautifulSoup(html, "html.parser")
+    programmes: list[Programme] = []
+
+    for card in soup.select("article.pol-courses--list-item"):
+        languages = str(card.get("data-course-languages") or "").split()
+        title_link = card.select_one(".pol-course-title a[href]")
+        if "EN" not in languages or not title_link:
+            continue
+        location = card.select_one(".pol-course-data--site dd")
+        programmes.append(
+            Programme(
+                university_slug="torino-politecnico",
+                university_name="Politecnico di Torino",
+                programme_name=clean(title_link.get_text(" ", strip=True)),
+                city=clean(location.get_text(" ", strip=True)) if location else "Turin",
+                degree_level=level,
+                teaching_language="English",
+                official_programme_code=None,
+                degree_class=None,
+                duration_years=3.0 if level == "Bachelor" else 2.0,
+                source_url=urljoin(catalogue_url, str(title_link.get("href"))),
+                catalogue_source_url=catalogue_url,
+            )
+        )
+    return programmes
+
+
+def parse_polito_bachelor(html: str, catalogue_url: str) -> list[Programme]:
+    return parse_polito(html, catalogue_url, "Bachelor")
+
+
+def parse_polito_master(html: str, catalogue_url: str) -> list[Programme]:
+    return parse_polito(html, catalogue_url, "Master")
+
+
+def parse_polimi(html: str, catalogue_url: str, level: str) -> list[Programme]:
+    soup = BeautifulSoup(html, "html.parser")
+    programmes: list[Programme] = []
+
+    for link in soup.select("a.link[href]"):
+        language = link.select_one(".info-label--internet")
+        title = link.select_one(".localised-title-title")
+        if not language or "ENG" not in clean(language.get_text(" ", strip=True)).split("-") or not title:
+            continue
+        campuses = [clean(node.get_text(" ", strip=True)) for node in link.select(".campusName")]
+        city = ", ".join(dict.fromkeys(campuses)) or "Milan"
+        programmes.append(
+            Programme(
+                university_slug="milano-politecnico",
+                university_name="Politecnico di Milano",
+                programme_name=clean(title.get_text(" ", strip=True)),
+                city=city,
+                degree_level=level,
+                teaching_language="English",
+                official_programme_code=None,
+                degree_class=None,
+                duration_years=3.0 if level == "Bachelor" else 2.0,
+                source_url=urljoin(catalogue_url, str(link.get("href"))),
+                catalogue_source_url=catalogue_url,
+            )
+        )
+    return programmes
+
+
+def parse_polimi_bachelor(html: str, catalogue_url: str) -> list[Programme]:
+    return parse_polimi(html, catalogue_url, "Bachelor")
+
+
+def parse_polimi_master(html: str, catalogue_url: str) -> list[Programme]:
+    return parse_polimi(html, catalogue_url, "Master")
+
+
+def parse_pisa(html: str, catalogue_url: str) -> list[Programme]:
+    soup = BeautifulSoup(html, "html.parser")
+    programmes: list[Programme] = []
+
+    for paragraph in soup.find_all("p"):
+        title_link = paragraph.find("a", href=True)
+        if not title_link:
+            continue
+        raw_name = clean(title_link.get_text(" ", strip=True))
+        if not re.match(r"^(?:Master|Bachelor)", raw_name, re.IGNORECASE):
+            continue
+        paragraph_text = clean(paragraph.get_text(" ", strip=True))
+        code_match = re.search(r"\b([A-Z]{2,4}-L(?:M)?)\b", paragraph_text)
+        level = "Bachelor" if raw_name.casefold().startswith("bachelor") else "Master"
+        name = re.sub(r"^Master(?:’s)?(?: Degree)?\s+(?:in\s+)?", "", raw_name, flags=re.IGNORECASE)
+        name = re.sub(r"^Bachelor(?:’s|'s)? Degree\s*(?:[-–]\s*|in\s+)?", "", name, flags=re.IGNORECASE)
+        programmes.append(
+            Programme(
+                university_slug="pisa",
+                university_name="University of Pisa",
+                programme_name=clean(name),
+                city="Pisa",
+                degree_level=level,
+                teaching_language="English",
+                official_programme_code=code_match.group(1) if code_match else None,
+                degree_class=None,
+                duration_years=3.0 if level == "Bachelor" else 2.0,
+                source_url=urljoin(catalogue_url, str(title_link.get("href"))),
+                catalogue_source_url=catalogue_url,
+            )
+        )
+    return programmes
+
+
 SOURCES = [
     Source(
         "unibo-first",
@@ -270,6 +377,36 @@ SOURCES = [
         "catalogue-sapienza.html",
         parse_sapienza,
     ),
+    Source(
+        "polito-bachelor",
+        "https://www.polito.it/en/education/bachelor-s-degree-programmes",
+        "catalogue-polito-bachelor.html",
+        parse_polito_bachelor,
+    ),
+    Source(
+        "polito-master",
+        "https://www.polito.it/en/education/master-s-degree-programmes",
+        "catalogue-polito-master.html",
+        parse_polito_master,
+    ),
+    Source(
+        "polimi-bachelor",
+        "https://www.polimi.it/en/education/laurea-programmes",
+        "catalogue-polimi-bachelor.html",
+        parse_polimi_bachelor,
+    ),
+    Source(
+        "polimi-master",
+        "https://www.polimi.it/en/education/laurea-magistrale-programmes",
+        "catalogue-polimi-master.html",
+        parse_polimi_master,
+    ),
+    Source(
+        "pisa",
+        "https://www.unipi.it/en/international-students/programmes-taught-in-english/degree-programmes-held-in-english/",
+        "catalogue-unipi.html",
+        parse_pisa,
+    ),
 ]
 
 
@@ -300,15 +437,16 @@ def deduplicate(programmes: Iterable[Programme]) -> list[Programme]:
     )
 
 
+def snapshot_identity(row: dict[str, object]) -> str:
+    identifier = row.get("official_programme_code") or (
+        f"{normalize_key(str(row['programme_name']))}:{normalize_key(str(row['degree_level']))}"
+    )
+    return f"{row['university_slug']}:{identifier}:{row['academic_year']}"
+
+
 def calculate_diff(previous: list[dict[str, object]], current: list[dict[str, object]]) -> dict[str, object]:
-    previous_by_id = {
-        f"{row['university_slug']}:{row.get('official_programme_code') or normalize_key(str(row['programme_name']))}:{row['academic_year']}": row
-        for row in previous
-    }
-    current_by_id = {
-        f"{row['university_slug']}:{row.get('official_programme_code') or normalize_key(str(row['programme_name']))}:{row['academic_year']}": row
-        for row in current
-    }
+    previous_by_id = {snapshot_identity(row): row for row in previous}
+    current_by_id = {snapshot_identity(row): row for row in current}
     added = sorted(set(current_by_id) - set(previous_by_id))
     removed = sorted(set(previous_by_id) - set(current_by_id))
     changed = sorted(
@@ -328,6 +466,12 @@ def generate_sql(records: list[dict[str, object]], checked_at: str) -> str:
     payload = json.dumps(records, ensure_ascii=False, separators=(",", ":"))
     return f"""-- Generated by scripts/catalogue/crawl.py. Do not hand-edit.
 -- Catalogue discovery only: no record is auto-verified and reviewed fields are preserved.
+
+alter table public.programmes
+  drop constraint if exists programmes_university_name_programme_name_academic_year_key;
+
+create unique index if not exists programmes_name_year_level_idx
+  on public.programmes (university_name, programme_name, academic_year, degree_level);
 
 with incoming as (
   select *
@@ -371,7 +515,8 @@ with incoming as (
     and (
       (resolved.official_programme_code is not null
         and programme.official_programme_code = resolved.official_programme_code)
-      or lower(programme.programme_name) = lower(resolved.programme_name)
+      or (lower(programme.programme_name) = lower(resolved.programme_name)
+        and programme.degree_level = resolved.degree_level)
     )
   returning programme.id
 )
@@ -411,10 +556,11 @@ where not exists (
     and (
       (resolved.official_programme_code is not null
         and existing.official_programme_code = resolved.official_programme_code)
-      or lower(existing.programme_name) = lower(resolved.programme_name)
+      or (lower(existing.programme_name) = lower(resolved.programme_name)
+        and existing.degree_level = resolved.degree_level)
     )
 )
-on conflict (university_name, programme_name, academic_year) do nothing;
+on conflict (university_name, programme_name, academic_year, degree_level) do nothing;
 """
 
 
@@ -431,6 +577,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--offline-dir", type=Path, help="Read saved source HTML instead of fetching")
     parser.add_argument("--output", type=Path, default=Path("data/catalogue/italy-programmes.json"))
+    parser.add_argument("--previous", type=Path, help="Snapshot to compare instead of the output path")
     parser.add_argument("--diff-output", type=Path, default=Path("data/catalogue/latest-diff.json"))
     parser.add_argument("--sql-output", type=Path, help="Also generate an idempotent Supabase import migration")
     parser.add_argument("--checked-at", default=date.today().isoformat())
@@ -446,8 +593,9 @@ def main() -> int:
     programmes = deduplicate(all_programmes)
     serialized = [programme.serialized() for programme in programmes]
     previous: list[dict[str, object]] = []
-    if args.output.exists():
-        previous_payload = json.loads(args.output.read_text(encoding="utf-8"))
+    previous_path = args.previous or args.output
+    if previous_path.exists():
+        previous_payload = json.loads(previous_path.read_text(encoding="utf-8"))
         previous = previous_payload.get("programmes", previous_payload) if isinstance(previous_payload, dict) else previous_payload
 
     diff = calculate_diff(previous, serialized)
