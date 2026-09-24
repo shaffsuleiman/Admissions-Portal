@@ -2233,42 +2233,64 @@ function ProgrammesView({
   ).length;
   const queueCount = programmes.length - verified - aiReviewed;
   // Reviews every programme in the current view that has no published rules yet.
-  // Paced for Gemini's free tier; stops early if the service stays busy or out of quota.
+  // Each successful review is saved immediately, so stopping or throttling never
+  // loses completed work.
   const reviewWithAi = async () => {
     const candidates = visible.filter((programme) => !["ai_reviewed", "verified"].includes(programme.status));
     if (!candidates.length) return;
     stopAiReview.current = false;
     let published = 0;
-    let busyInARow = 0;
     let processed = 0;
-    let stoppedFor = "";
+    let nextIndex = 0;
+    let failed = 0;
     setAiReviewing({ done: 0, total: candidates.length, published: 0 });
-    for (const programme of candidates) {
-      if (stopAiReview.current) break;
-      try {
-        const result = await onAiReview(programme);
-        if (result.status === "ai_reviewed") published += 1;
-        busyInARow = 0;
-      } catch (error) {
-        const message = messageOf(error) ?? "";
-        if (/busy|quota|rate|429|503/i.test(message)) {
-          busyInARow += 1;
-          if (busyInARow >= 3) {
-            stoppedFor = "Gemini is busy or out of free quota. Try again later to continue where it stopped.";
-            break;
-          }
+
+    const reviewOne = async (programme: Programme) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          return await onAiReview(programme);
+        } catch (error) {
+          const retryable = /busy|quota|rate|429|500|502|503|504|timeout/i.test(
+            messageOf(error) ?? "",
+          );
+          if (!retryable || attempt === 2) throw error;
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1_500 * 2 ** attempt + Math.random() * 500),
+          );
         }
       }
-      processed += 1;
-      setAiReviewing({ done: processed, total: candidates.length, published });
-      await new Promise((resolve) => setTimeout(resolve, 4_000));
-    }
+      throw new Error("Review failed after retries.");
+    };
+
+    const worker = async () => {
+      while (!stopAiReview.current) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= candidates.length) return;
+        try {
+          const result = await reviewOne(candidates[index]);
+          if (result.status === "ai_reviewed") published += 1;
+        } catch {
+          failed += 1;
+        } finally {
+          processed += 1;
+          setAiReviewing({ done: processed, total: candidates.length, published });
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(6, candidates.length) }, worker),
+    );
     setAiReviewing({ done: 0, total: 0, published: 0 });
     await onReviewBatchDone();
-    onNotify(
-      stoppedFor ||
-        `${published} of ${processed} programmes now have evidence-backed rules${processed < candidates.length ? " (stopped early)" : ""}. The rest need a person to review.`,
-    );
+    if (stopAiReview.current) {
+      onNotify(`Review stopped after ${processed}/${candidates.length}; completed records were saved.`);
+    } else if (failed) {
+      onNotify(`${published} rules published; ${failed} pages failed after retries and remain queued.`);
+    } else {
+      onNotify(`${published} programme rules published from ${processed} source reviews.`);
+    }
   };
   const catalogueTabs = (
     <div className="tab-bar" role="tablist" aria-label="Catalogue view">
