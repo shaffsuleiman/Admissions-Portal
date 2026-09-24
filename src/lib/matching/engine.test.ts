@@ -171,15 +171,31 @@ test("a passed deadline in the student's own cycle still fails", () => {
   assert.equal(result.result, "not_eligible");
 });
 
-test("degree field: matching backgrounds pass, others are ranked low but not rejected", () => {
+test("degree field: matching backgrounds pass, clear mismatches are not eligible", () => {
   const rules = { acceptedFields: ["Any field of Engineering", "Computer science"] };
   const cs = evaluate(student({ degreeTitle: "BS Computer Science" }), rules, { today });
   const se = evaluate(student({ degreeTitle: "BS Software Engineering" }), rules, { today });
   const arch = evaluate(student({ degreeTitle: "Bachelor of Architecture" }), rules, { today });
   assert.equal(cs.checks[0].outcome, "pass");
   assert.equal(se.checks[0].outcome, "pass");
-  assert.equal(arch.checks[0].outcome, "borderline");
+  assert.equal(arch.checks[0].outcome, "fail");
+  assert.equal(arch.result, "not_eligible");
   assert.ok(cs.score > arch.score);
+  const accounting = evaluate(student({ degreeTitle: "BS Accounting and Finance" }), { acceptedFields: ["Civil Engineering", "Building Engineering", "Architecture"] }, { today });
+  assert.equal(accounting.result, "not_eligible");
+  const businessFit = evaluate(student({ degreeTitle: "BS Accounting and Finance" }), { acceptedFields: ["Economics", "Finance", "Accounting"] }, { today });
+  assert.equal(businessFit.checks[0].outcome, "pass");
+  const unknown = evaluate(student({ degreeTitle: null }), rules, { today });
+  assert.equal(unknown.checks[0].outcome, "borderline");
   assert.equal(degreeMatchesField("BSc Mathematics", "Mathematics"), true);
   assert.equal(degreeMatchesField("BS Electrical Engineering", "Mechanical engineering"), false);
+});
+
+test("common Pakistani degree abbreviations match their fields", () => {
+  assert.equal(degreeMatchesField("BBA (Hons)", "Business"), true);
+  assert.equal(degreeMatchesField("B.Com", "Accounting"), true);
+  assert.equal(degreeMatchesField("BSCS", "Computer science"), true);
+  assert.equal(degreeMatchesField("BSSE", "Computer science"), true);
+  assert.equal(degreeMatchesField("BE Mechanical", "Any field of Engineering"), true);
+  assert.equal(degreeMatchesField("BS Accounting and Finance", "Building Engineering"), false);
 });

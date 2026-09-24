@@ -167,19 +167,26 @@ export function hasEligibilityRules(rules: ProgrammeRules) {
 }
 
 const FIELD_STOPWORDS = new Set(["and", "or", "of", "the", "in", "field", "fields", "similar", "degree", "degrees", "bachelor", "bachelors", "science", "sciences", "studies"]);
+// Includes common Pakistani degree abbreviations (BSCS, BSSE, BBA, B.Com...).
 const FIELD_SYNONYMS: Record<string, string[]> = {
   mathematics: ["mathematics", "math", "maths"],
-  computer: ["computer", "computing", "software", "information technology"],
+  computer: ["computer", "computing", "software", "information technology", "bscs", "bsse", "bsit", "bs cs", "bs it"],
+  information: ["information", "bsit", "bs it"],
+  technology: ["technology", "bsit", "bs it"],
   ict: ["ict", "information", "communication", "telecommunication"],
   economics: ["economics", "economic"],
-  management: ["management", "business"],
+  management: ["management", "business", "bba", "mba"],
+  business: ["business", "bba", "mba", "commerce", "b.com", "bcom"],
+  accounting: ["accounting", "accountancy", "commerce", "b.com", "bcom"],
+  finance: ["finance", "financial", "banking"],
 };
+const ENGINEERING_DEGREE = /engineer|\bb\.?e\b|\bbsc eng/;
 
 /** True when a degree title plausibly belongs to one of the programme's accepted fields. */
 export function degreeMatchesField(degreeTitle: string, field: string) {
   const degree = degreeTitle.toLowerCase();
   const wanted = field.toLowerCase().replace(/[*()]/g, " ");
-  if (/\bany (field of )?engineering\b/.test(wanted)) return /engineer/.test(degree);
+  if (/\bany (field of )?engineering\b/.test(wanted)) return ENGINEERING_DEGREE.test(degree);
   const tokens = wanted.split(/[^a-z]+/).filter((token) => token.length > 2 && !FIELD_STOPWORDS.has(token));
   if (!tokens.length) return false;
   return tokens.every((token) => (FIELD_SYNONYMS[token] ?? [token]).some((variant) => degree.includes(variant)));
@@ -214,21 +221,21 @@ export function evaluate(
       score: 0,
     });
 
-  // 0. Field of the previous degree. Committees can admit other backgrounds,
-  // so a mismatch ranks the programme low but is never an outright rejection.
+  // 0. Field of the previous degree. A degree outside the accepted backgrounds is not
+  // eligible; only a missing degree title stays uncertain.
   if (rules.acceptedFields?.length) {
     const degree = student.degreeTitle?.trim();
     const fits = degree ? rules.acceptedFields.some((field) => degreeMatchesField(degree, field)) : false;
     checks.push({
       key: "degree",
       label: "Degree field",
-      outcome: fits ? "pass" : "borderline",
+      outcome: fits ? "pass" : degree ? "fail" : "borderline",
       detail: !degree
         ? `Degree title not recorded (accepted backgrounds: ${rules.acceptedFields.join(", ")})`
         : fits
           ? `${degree} fits the accepted backgrounds`
-          : `${degree} is not among the listed backgrounds (${rules.acceptedFields.join(", ")}); the admissions committee decides`,
-      score: fits ? 95 : degree ? 20 : 40,
+          : `${degree} is not an accepted background (needs ${rules.acceptedFields.join(", ")})`,
+      score: fits ? 95 : degree ? 0 : 40,
     });
   }
 
