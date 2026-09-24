@@ -109,6 +109,22 @@ type View =
   | "Team"
   | "Settings";
 
+const viewSlugs: Record<View, string> = {
+  Overview: "overview",
+  Students: "students",
+  Matches: "matches",
+  Programmes: "programmes",
+  Applications: "applications",
+  Calendar: "calendar",
+  Reports: "reports",
+  Team: "team",
+  Settings: "settings",
+};
+
+const viewFromSlug = (value: string | null): View =>
+  ((Object.entries(viewSlugs).find(([, slug]) => slug === value)?.[0] as View) ??
+    "Overview");
+
 const TODAY = new Date();
 
 const isoDate = (date: Date) =>
@@ -753,6 +769,9 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
     Programme | "new" | null
   >(null);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<
+    "connecting" | "live" | "offline"
+  >("connecting");
   const tutorialPrompted = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -761,8 +780,10 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
     setDataError("");
     try {
       setData(await loadWorkspaceData());
+      return true;
     } catch (error) {
       setDataError(messageOf(error) ?? "Could not load your workspace.");
+      return false;
     } finally {
       setLoadingData(false);
     }
@@ -787,6 +808,14 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   useEffect(() => {
+    const syncViewFromUrl = () =>
+      setView(viewFromSlug(new URLSearchParams(window.location.search).get("view")));
+    syncViewFromUrl();
+    window.addEventListener("popstate", syncViewFromUrl);
+    return () => window.removeEventListener("popstate", syncViewFromUrl);
+  }, []);
+
+  useEffect(() => {
     if (data && !data.onboardingComplete && !tutorialPrompted.current) {
       tutorialPrompted.current = true;
       setTutorialOpen(true);
@@ -801,6 +830,10 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   const navigate = (next: View) => {
     setView(next);
     setSidebarOpen(false);
+    const url = new URL(window.location.href);
+    if (next === "Overview") url.searchParams.delete("view");
+    else url.searchParams.set("view", viewSlugs[next]);
+    window.history.pushState(null, "", `${url.pathname}${url.search}${url.hash}`);
   };
   const openSettings = (section: SettingsSection) => {
     setSettingsSection(section);
@@ -823,6 +856,43 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    const workspaceId = data?.workspace.id;
+    if (!workspaceId) return;
+    let cancelled = false;
+    const sync = async () => {
+      if (document.visibilityState === "hidden" || !navigator.onLine) return;
+      setRealtimeStatus("connecting");
+      const ok = await refresh();
+      if (!cancelled) setRealtimeStatus(ok ? "live" : "offline");
+    };
+    const onFocus = () => void sync();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
+    const onOnline = () => void sync();
+    const onOffline = () => setRealtimeStatus("offline");
+    const statusTimer = window.setTimeout(
+      () => setRealtimeStatus(navigator.onLine ? "live" : "offline"),
+      0,
+    );
+    const interval = window.setInterval(() => void sync(), 15_000);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(statusTimer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [data?.workspace.id, refresh]);
 
   if (loadingData)
     return (
@@ -1005,6 +1075,9 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               />
               <kbd>⌘ K</kbd>
             </form>
+            <span className={`live-sync ${realtimeStatus}`} title="Automatic workspace updates">
+              <i /> {realtimeStatus === "live" ? "Auto sync" : realtimeStatus === "offline" ? "Offline" : "Syncing"}
+            </span>
             <button
               className="icon-button"
               aria-label="Open quick-start tutorial"
@@ -1082,7 +1155,9 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               isVerifier={isVerifier}
               onEdit={setEditingProgramme}
               onAiReview={(programme) => aiReviewProgramme(programme.id)}
-              onReviewBatchDone={refresh}
+              onReviewBatchDone={async () => {
+                await refresh();
+              }}
               onNotify={notify}
             />
           )}
@@ -1176,7 +1251,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
           }}
           onStart={async () => {
             setTutorialOpen(false);
-            setView("Students");
+            navigate("Students");
             setNewStudent(true);
             if (!data.onboardingComplete) {
               try {
