@@ -96,6 +96,19 @@ function compare(actual: number, required: number): CheckOutcome {
   return actual >= required * (1 - BORDERLINE_MARGIN) ? "borderline" : "fail";
 }
 
+/** A verified programme must contain at least one actual admissions rule. */
+export function hasEligibilityRules(rules: ProgrammeRules) {
+  return Boolean(
+    rules.minYearsOfEducation ||
+      rules.minGrade110 ||
+      rules.minCgpa4 ||
+      rules.subjectCredits?.some((requirement) => requirement.ects > 0) ||
+      rules.english?.ielts ||
+      rules.english?.toefl ||
+      rules.extras?.length,
+  );
+}
+
 export function evaluate(
   student: StudentFacts,
   rules: ProgrammeRules,
@@ -104,6 +117,15 @@ export function evaluate(
   const conversion = options.conversion ?? DEFAULT_CONVERSION;
   const today = options.today ?? new Date();
   const checks: Check[] = [];
+
+  // Never silently return 100% when a catalogue record has no admissions rules.
+  if (!hasEligibilityRules(rules))
+    checks.push({
+      key: "extras",
+      label: "Eligibility rules",
+      outcome: "borderline",
+      detail: "Eligibility rules have not been recorded; manual verification is required",
+    });
 
   // 1. Degree level and duration
   const minYears = rules.minYearsOfEducation ?? null;

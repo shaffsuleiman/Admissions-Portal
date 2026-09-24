@@ -3,6 +3,7 @@ import type { ProgrammeDraft, TranscriptExtraction } from "@/lib/ai/schemas";
 import {
   DEFAULT_CONVERSION,
   evaluate,
+  hasEligibilityRules,
   normalizeRules,
   serializeRules,
   type Check,
@@ -602,44 +603,48 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   ).map(mapProgramme);
   const matches: MatchResult[] = (
     (matchesResult.data ?? []) as Record<string, unknown>[]
-  ).map((row) => {
-    const programme = asObject(row.programmes) ?? {};
-    const university = String(
-      programme.university_name ?? "Unknown university",
-    );
-    return {
-      id: String(row.id),
-      studentId: String(row.student_id),
-      programmeId: String(row.programme_id),
-      university,
-      programme: String(programme.programme_name ?? "Untitled programme"),
-      city: String(programme.city ?? "Not set"),
-      status: matchLabels[String(row.result)] ?? String(row.result),
-      score: Number(row.score ?? 0),
-      fee: euro(
-        typeof programme.annual_tuition_eur === "number"
-          ? programme.annual_tuition_eur
-          : null,
-      ),
-      deadline: displayDate(
-        typeof programme.application_deadline === "string"
-          ? programme.application_deadline
-          : null,
-      ),
-      verified: displayDate(
-        typeof programme.verified_at === "string"
-          ? programme.verified_at
-          : null,
-      ),
-      logo: programmeCode(university),
-      tone: toneFor(String(row.programme_id)),
-      reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
-      checks: Array.isArray(row.checks) ? (row.checks as Check[]) : [],
-      programmeVerified: programme.verification_status === "verified",
-      source: String(programme.source_url ?? ""),
-      generatedAt: String(row.generated_at ?? ""),
-    };
-  });
+  )
+    .filter(
+      (row) => asObject(row.programmes)?.verification_status === "verified",
+    )
+    .map((row) => {
+      const programme = asObject(row.programmes) ?? {};
+      const university = String(
+        programme.university_name ?? "Unknown university",
+      );
+      return {
+        id: String(row.id),
+        studentId: String(row.student_id),
+        programmeId: String(row.programme_id),
+        university,
+        programme: String(programme.programme_name ?? "Untitled programme"),
+        city: String(programme.city ?? "Not set"),
+        status: matchLabels[String(row.result)] ?? String(row.result),
+        score: Number(row.score ?? 0),
+        fee: euro(
+          typeof programme.annual_tuition_eur === "number"
+            ? programme.annual_tuition_eur
+            : null,
+        ),
+        deadline: displayDate(
+          typeof programme.application_deadline === "string"
+            ? programme.application_deadline
+            : null,
+        ),
+        verified: displayDate(
+          typeof programme.verified_at === "string"
+            ? programme.verified_at
+            : null,
+        ),
+        logo: programmeCode(university),
+        tone: toneFor(String(row.programme_id)),
+        reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
+        checks: Array.isArray(row.checks) ? (row.checks as Check[]) : [],
+        programmeVerified: programme.verification_status === "verified",
+        source: String(programme.source_url ?? ""),
+        generatedAt: String(row.generated_at ?? ""),
+      };
+    });
 
   const applications: Application[] = (
     (applicationsResult.data ?? []) as Record<string, unknown>[]
@@ -1057,7 +1062,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
         .select(
           "id, university_id, requirements, application_deadline, verification_status",
         )
-        .in("verification_status", ["verified", "unverified", "in_review"]),
+        .eq("verification_status", "verified"),
       supabase
         .from("universities")
         .select("id, ects_per_credit_hour, grade_pass_ratio"),
@@ -1075,7 +1080,9 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
       "Review and confirm the student’s academic profile before matching.",
     );
   if (!programmesResult.data?.length)
-    throw new Error("No programmes are published yet.");
+    throw new Error(
+      "No programmes have human-verified admission rules yet. Verify programme rules before matching.",
+    );
 
   const conversions = new Map(
     (universitiesResult.error ? [] : (universitiesResult.data ?? [])).map(
@@ -1318,6 +1325,10 @@ export async function saveProgramme(input: ProgrammeInput) {
     throw new Error("Your session expired. Please sign in again.");
   if (!input.source.trim())
     throw new Error("Add the source link you checked the rules against.");
+  if (input.status === "verified" && !hasEligibilityRules(input.rules))
+    throw new Error(
+      "Add at least one admission requirement before marking this programme verified.",
+    );
   const row = {
     university_id: input.universityId,
     university_name: input.university.trim(),

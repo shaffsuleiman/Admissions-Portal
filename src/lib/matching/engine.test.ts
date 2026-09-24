@@ -52,9 +52,17 @@ test("medium-of-instruction letter satisfies English only where accepted", () =>
 });
 
 test("closed deadlines fail and near deadlines are flagged", () => {
-  assert.equal(evaluate(student(), {}, { today, deadline: "2026-09-01" }).result, "not_eligible");
-  assert.equal(evaluate(student(), {}, { today, deadline: "2026-09-30" }).result, "borderline");
-  assert.equal(evaluate(student(), {}, { today, deadline: "2027-01-11" }).result, "eligible");
+  const rules = { minYearsOfEducation: 16 };
+  assert.equal(evaluate(student(), rules, { today, deadline: "2026-09-01" }).result, "not_eligible");
+  assert.equal(evaluate(student(), rules, { today, deadline: "2026-09-30" }).result, "borderline");
+  assert.equal(evaluate(student(), rules, { today, deadline: "2027-01-11" }).result, "eligible");
+});
+
+test("a programme with no admissions rules is never silently eligible", () => {
+  const result = evaluate(student(), {}, { today });
+  assert.equal(result.result, "borderline");
+  assert.equal(result.score, 92);
+  assert.match(result.checks[0].detail, /manual verification/i);
 });
 
 test("missing data is borderline so a counsellor looks, never silently eligible", () => {

@@ -1746,7 +1746,7 @@ function MatchesView({
       <PageTitle
         eyebrow="ELIGIBILITY ENGINE"
         title="Match centre"
-        text="Every result comes from fixed rules, never AI guesses, with the exact reason for each check."
+        text="Only human-verified programme rules are matched. Every result comes from fixed rules, never AI guesses."
       >
         <button
           className="secondary-button"
@@ -2002,7 +2002,7 @@ function MatchesView({
               {studentMatches.length
                 ? "Choose another result filter."
                 : student.academic.confirmedAt
-                  ? "Run a new match to check every published programme."
+                  ? "Run a new match against programmes with human-verified admission rules."
                   : "Review and confirm the student’s profile, then run a match."}
             </span>
           </div>
