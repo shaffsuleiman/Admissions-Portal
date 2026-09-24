@@ -299,8 +299,23 @@ export function evaluate(
   if (rules.extras?.length)
     checks.push({ key: "extras", label: "Extra requirements", outcome: "borderline", detail: `Additional requirement needs confirmation: ${rules.extras.join(", ")}`, score: 55 });
 
+  // Italian calls for the next intake publish Nov–Feb, so the catalogue often holds the
+  // previous cycle's rules. Those are a useful guide, but their deadline says nothing
+  // about the student's target intake and must not reject them.
+  const targetYear = explicitYear(options.targetIntake);
+  const programmeYear = explicitYear(options.programmeIntake);
+  const previousCycle = Boolean(targetYear && programmeYear && Number(programmeYear) < Number(targetYear));
+
   // 6. Deadline still open
-  if (options.deadline) {
+  if (options.deadline && previousCycle) {
+    checks.push({
+      key: "deadline",
+      label: "Deadline",
+      outcome: "borderline",
+      detail: `The ${options.targetIntake} deadline isn’t published yet (last cycle closed ${options.deadline.slice(0, 10)}); rules are from the ${options.programmeIntake} call`,
+      score: 50,
+    });
+  } else if (options.deadline) {
     const due = new Date(`${options.deadline.slice(0, 10)}T23:59:59Z`);
     const days = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
     checks.push({
@@ -329,9 +344,16 @@ export function evaluate(
     });
   }
 
-  const targetYear = explicitYear(options.targetIntake);
-  const programmeYear = explicitYear(options.programmeIntake);
-  if (targetYear && programmeYear) {
+  if (previousCycle) {
+    checks.push({
+      key: "intake",
+      label: "Intake fit",
+      category: "preference",
+      outcome: "borderline",
+      detail: `Rules are from the ${options.programmeIntake} cycle; confirm the ${options.targetIntake} call once it is published`,
+      score: 60,
+    });
+  } else if (targetYear && programmeYear) {
     const targetSeason = intakeSeason(options.targetIntake ?? "");
     const programmeSeason = intakeSeason(options.programmeIntake ?? "");
     const same = targetYear === programmeYear && (!targetSeason || !programmeSeason || targetSeason === programmeSeason);

@@ -959,11 +959,8 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               universities={universities}
               isVerifier={isVerifier}
               onEdit={setEditingProgramme}
-              onAiReview={async (programme) => {
-                const result = await aiReviewProgramme(programme.id);
-                await refresh();
-                return result;
-              }}
+              onAiReview={(programme) => aiReviewProgramme(programme.id)}
+              onReviewBatchDone={refresh}
               onNotify={notify}
             />
           )}
@@ -2168,6 +2165,7 @@ function ProgrammesView({
   isVerifier,
   onEdit,
   onAiReview,
+  onReviewBatchDone,
   onNotify,
 }: {
   programmes: Programme[];
@@ -2175,6 +2173,7 @@ function ProgrammesView({
   isVerifier: boolean;
   onEdit: (programme: Programme | "new") => void;
   onAiReview: (programme: Programme) => Promise<{ status: "ai_reviewed" | "in_review"; confidence: number }>;
+  onReviewBatchDone: () => Promise<void>;
   onNotify: (message: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -2183,7 +2182,8 @@ function ProgrammesView({
   );
   const [levelFilter, setLevelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [aiReviewing, setAiReviewing] = useState({ done: 0, total: 0 });
+  const [aiReviewing, setAiReviewing] = useState({ done: 0, total: 0, published: 0 });
+  const stopAiReview = useRef(false);
   const queueMode = statusFilter === "queue";
   const visible = programmes
     .filter((programme) => {
@@ -2232,24 +2232,43 @@ function ProgrammesView({
     ["stale", "unverified"].includes(programme.status),
   ).length;
   const queueCount = programmes.length - verified - aiReviewed;
+  // Reviews every programme in the current view that has no published rules yet.
+  // Paced for Gemini's free tier; stops early if the service stays busy or out of quota.
   const reviewWithAi = async () => {
-    const candidates = visible
-      .filter((programme) => !["ai_reviewed", "verified"].includes(programme.status))
-      .slice(0, 5);
+    const candidates = visible.filter((programme) => !["ai_reviewed", "verified"].includes(programme.status));
     if (!candidates.length) return;
-    setAiReviewing({ done: 0, total: candidates.length });
+    stopAiReview.current = false;
     let published = 0;
-    for (let index = 0; index < candidates.length; index += 1) {
+    let busyInARow = 0;
+    let processed = 0;
+    let stoppedFor = "";
+    setAiReviewing({ done: 0, total: candidates.length, published: 0 });
+    for (const programme of candidates) {
+      if (stopAiReview.current) break;
       try {
-        const result = await onAiReview(candidates[index]);
+        const result = await onAiReview(programme);
         if (result.status === "ai_reviewed") published += 1;
+        busyInARow = 0;
       } catch (error) {
-        onNotify(messageOf(error) ?? `Could not AI-review ${candidates[index].programme}`);
+        const message = messageOf(error) ?? "";
+        if (/busy|quota|rate|429|503/i.test(message)) {
+          busyInARow += 1;
+          if (busyInARow >= 3) {
+            stoppedFor = "Gemini is busy or out of free quota. Try again later to continue where it stopped.";
+            break;
+          }
+        }
       }
-      setAiReviewing({ done: index + 1, total: candidates.length });
+      processed += 1;
+      setAiReviewing({ done: processed, total: candidates.length, published });
+      await new Promise((resolve) => setTimeout(resolve, 4_000));
     }
-    setAiReviewing({ done: 0, total: 0 });
-    onNotify(`${published} of ${candidates.length} programmes passed automated review`);
+    setAiReviewing({ done: 0, total: 0, published: 0 });
+    await onReviewBatchDone();
+    onNotify(
+      stoppedFor ||
+        `${published} of ${processed} programmes now have evidence-backed rules${processed < candidates.length ? " (stopped early)" : ""}. The rest need a person to review.`,
+    );
   };
   const catalogueTabs = (
     <div className="tab-bar" role="tablist" aria-label="Catalogue view">
@@ -2466,14 +2485,20 @@ function ProgrammesView({
             >
               <ListChecks size={16} /> Review queue ({queueCount})
             </button>
-            <button
-              className="primary-button"
-              disabled={Boolean(aiReviewing.total) || !queueCount}
-              onClick={() => void reviewWithAi()}
-            >
-              {aiReviewing.total ? <span className="spinner" /> : <Sparkles size={16} />}
-              {aiReviewing.total ? `AI reviewing ${aiReviewing.done}/${aiReviewing.total}` : "AI review next 5"}
-            </button>
+            {aiReviewing.total ? (
+              <button className="primary-button" onClick={() => (stopAiReview.current = true)}>
+                <span className="spinner" /> AI reviewing {aiReviewing.done}/{aiReviewing.total} · {aiReviewing.published} published · Stop
+              </button>
+            ) : (
+              <button
+                className="primary-button"
+                disabled={!queueCount}
+                onClick={() => void reviewWithAi()}
+                title="Reviews every programme in the current view that has no published rules yet"
+              >
+                <Sparkles size={16} /> AI review all ({visible.filter((programme) => !["ai_reviewed", "verified"].includes(programme.status)).length})
+              </button>
+            )}
             <button className="primary-button" onClick={() => onEdit("new")}>
               <Plus size={17} /> Add programme
             </button>

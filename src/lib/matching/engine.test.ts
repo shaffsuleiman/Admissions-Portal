@@ -146,3 +146,27 @@ test("legacy starter rules and the current shape round-trip", () => {
   ]);
   assert.deepEqual(normalizeRules(serializeRules(legacy)), legacy);
 });
+
+test("last cycle's rules guide matching without rejecting on last cycle's deadline", () => {
+  const rules = { minYearsOfEducation: 16, english: { ielts: 5.5 } };
+  const result = evaluate(student(), rules, {
+    today,
+    deadline: "2026-04-09",
+    requireDeadline: true,
+    programmeIntake: "Fall 2026",
+    targetIntake: "Fall 2027",
+  });
+  assert.equal(result.result, "borderline");
+  assert.match(result.checks.find((check) => check.key === "deadline")?.detail ?? "", /Fall 2027 deadline isn’t published yet/);
+  assert.equal(result.checks.find((check) => check.key === "intake")?.outcome, "borderline");
+});
+
+test("a passed deadline in the student's own cycle still fails", () => {
+  const result = evaluate(student(), { minYearsOfEducation: 16 }, {
+    today,
+    deadline: "2026-04-09",
+    programmeIntake: "Fall 2026",
+    targetIntake: "Fall 2026",
+  });
+  assert.equal(result.result, "not_eligible");
+});
