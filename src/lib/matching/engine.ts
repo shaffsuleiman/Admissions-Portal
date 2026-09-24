@@ -36,6 +36,8 @@ export type ProgrammeRules = {
   };
   /** Requirements the counsellor must check by hand (GRE, entrance test, portfolio...). */
   extras?: string[];
+  /** Bachelor's fields the programme accepts, e.g. "Computer science", "Any field of Engineering". */
+  acceptedFields?: string[];
 };
 
 /** Per-university conversion rules; defaults follow the plan's common practice. */
@@ -48,6 +50,8 @@ export type Conversion = {
 export const DEFAULT_CONVERSION: Conversion = { ectsPerCreditHour: 1.8, passRatio: 0.5 };
 
 export type StudentFacts = {
+  /** e.g. "BS Computer Science"; compared against a programme's accepted fields. */
+  degreeTitle?: string | null;
   yearsOfEducation: number | null;
   cgpa: number | null;
   cgpaScale: number | null;
@@ -157,8 +161,28 @@ export function hasEligibilityRules(rules: ProgrammeRules) {
       rules.subjectCredits?.some((requirement) => requirement.ects > 0) ||
       rules.english?.ielts ||
       rules.english?.toefl ||
-      rules.extras?.length,
+      rules.extras?.length ||
+      rules.acceptedFields?.length,
   );
+}
+
+const FIELD_STOPWORDS = new Set(["and", "or", "of", "the", "in", "field", "fields", "similar", "degree", "degrees", "bachelor", "bachelors", "science", "sciences", "studies"]);
+const FIELD_SYNONYMS: Record<string, string[]> = {
+  mathematics: ["mathematics", "math", "maths"],
+  computer: ["computer", "computing", "software", "information technology"],
+  ict: ["ict", "information", "communication", "telecommunication"],
+  economics: ["economics", "economic"],
+  management: ["management", "business"],
+};
+
+/** True when a degree title plausibly belongs to one of the programme's accepted fields. */
+export function degreeMatchesField(degreeTitle: string, field: string) {
+  const degree = degreeTitle.toLowerCase();
+  const wanted = field.toLowerCase().replace(/[*()]/g, " ");
+  if (/\bany (field of )?engineering\b/.test(wanted)) return /engineer/.test(degree);
+  const tokens = wanted.split(/[^a-z]+/).filter((token) => token.length > 2 && !FIELD_STOPWORDS.has(token));
+  if (!tokens.length) return false;
+  return tokens.every((token) => (FIELD_SYNONYMS[token] ?? [token]).some((variant) => degree.includes(variant)));
 }
 
 export function evaluate(
@@ -189,6 +213,24 @@ export function evaluate(
       detail: "Eligibility rules have not been recorded; manual verification is required",
       score: 0,
     });
+
+  // 0. Field of the previous degree. Committees can admit other backgrounds,
+  // so a mismatch ranks the programme low but is never an outright rejection.
+  if (rules.acceptedFields?.length) {
+    const degree = student.degreeTitle?.trim();
+    const fits = degree ? rules.acceptedFields.some((field) => degreeMatchesField(degree, field)) : false;
+    checks.push({
+      key: "degree",
+      label: "Degree field",
+      outcome: fits ? "pass" : "borderline",
+      detail: !degree
+        ? `Degree title not recorded (accepted backgrounds: ${rules.acceptedFields.join(", ")})`
+        : fits
+          ? `${degree} fits the accepted backgrounds`
+          : `${degree} is not among the listed backgrounds (${rules.acceptedFields.join(", ")}); the admissions committee decides`,
+      score: fits ? 95 : degree ? 20 : 40,
+    });
+  }
 
   // 1. Degree level and duration
   const minYears = rules.minYearsOfEducation ?? null;
@@ -414,6 +456,7 @@ export function normalizeRules(raw: unknown): ProgrammeRules {
       mediumOfInstructionAccepted: Boolean(english.moi_accepted),
     },
     extras: Array.isArray(value.extras) ? value.extras.map(String).filter(Boolean) : [],
+    acceptedFields: Array.isArray(value.accepted_fields) ? value.accepted_fields.map(String).filter(Boolean) : [],
   };
 }
 
@@ -430,5 +473,6 @@ export function serializeRules(rules: ProgrammeRules) {
       moi_accepted: Boolean(rules.english?.mediumOfInstructionAccepted),
     },
     extras: rules.extras ?? [],
+    accepted_fields: rules.acceptedFields ?? [],
   };
 }

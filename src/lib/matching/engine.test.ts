@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { evaluate, normalizeRules, serializeRules, toItalian110, type StudentFacts } from "./engine.ts";
+import { degreeMatchesField, evaluate, normalizeRules, serializeRules, toItalian110, type StudentFacts } from "./engine.ts";
 
 const student = (overrides: Partial<StudentFacts> = {}): StudentFacts => ({
   yearsOfEducation: 16,
@@ -169,4 +169,17 @@ test("a passed deadline in the student's own cycle still fails", () => {
     targetIntake: "Fall 2026",
   });
   assert.equal(result.result, "not_eligible");
+});
+
+test("degree field: matching backgrounds pass, others are ranked low but not rejected", () => {
+  const rules = { acceptedFields: ["Any field of Engineering", "Computer science"] };
+  const cs = evaluate(student({ degreeTitle: "BS Computer Science" }), rules, { today });
+  const se = evaluate(student({ degreeTitle: "BS Software Engineering" }), rules, { today });
+  const arch = evaluate(student({ degreeTitle: "Bachelor of Architecture" }), rules, { today });
+  assert.equal(cs.checks[0].outcome, "pass");
+  assert.equal(se.checks[0].outcome, "pass");
+  assert.equal(arch.checks[0].outcome, "borderline");
+  assert.ok(cs.score > arch.score);
+  assert.equal(degreeMatchesField("BSc Mathematics", "Mathematics"), true);
+  assert.equal(degreeMatchesField("BS Electrical Engineering", "Mechanical engineering"), false);
 });

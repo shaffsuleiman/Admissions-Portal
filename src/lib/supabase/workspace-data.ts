@@ -1202,6 +1202,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
   );
   const facts = mapAcademic(academic);
   const student = {
+    degreeTitle: facts.degreeTitle,
     yearsOfEducation: facts.yearsOfEducation,
     cgpa: facts.cgpa,
     cgpaScale: facts.cgpaScale,
