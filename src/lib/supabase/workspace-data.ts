@@ -116,6 +116,8 @@ export type Programme = {
   degreeClass: string;
   cataloguedAt: string | null;
   verifiedAt: string | null;
+  aiReviewedAt: string | null;
+  aiConfidence: number | null;
   reviewStartedAt: string | null;
   sourceCheckedAt: string | null;
   evidence: { field: string; quote: string }[];
@@ -152,6 +154,7 @@ export type MatchResult = {
   reasons: string[];
   checks: Check[];
   programmeVerified: boolean;
+  programmeReviewStatus: "ai_reviewed" | "verified";
   source: string;
   generatedAt: string;
 };
@@ -340,6 +343,8 @@ function mapProgramme(row: Record<string, unknown>): Programme {
   const university = String(row.university_name ?? "Unknown university");
   const verifiedAt =
     typeof row.verified_at === "string" ? row.verified_at : null;
+  const aiReviewedAt =
+    typeof row.ai_reviewed_at === "string" ? row.ai_reviewed_at : null;
   const deadline =
     typeof row.application_deadline === "string"
       ? row.application_deadline
@@ -360,7 +365,9 @@ function mapProgramme(row: Record<string, unknown>): Programme {
     deadlineIso: deadline,
     freshness: verifiedAt
       ? `Verified ${relativeDate(verifiedAt)}`
-      : "Not verified",
+      : aiReviewedAt
+        ? `AI reviewed ${relativeDate(aiReviewedAt)}`
+        : "Not reviewed",
     status: String(row.verification_status ?? "unverified"),
     tone: toneFor(String(row.id)),
     source: String(row.source_url ?? "#"),
@@ -377,6 +384,8 @@ function mapProgramme(row: Record<string, unknown>): Programme {
         ? row.catalogue_checked_at
         : null,
     verifiedAt,
+    aiReviewedAt,
+    aiConfidence: numberOrNull(row.ai_confidence),
     reviewStartedAt:
       typeof row.review_started_at === "string"
         ? row.review_started_at
@@ -621,8 +630,10 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   const matches: MatchResult[] = (
     (matchesResult.data ?? []) as Record<string, unknown>[]
   )
-    .filter(
-      (row) => asObject(row.programmes)?.verification_status === "verified",
+    .filter((row) =>
+      ["ai_reviewed", "verified"].includes(
+        String(asObject(row.programmes)?.verification_status),
+      ),
     )
     .map((row) => {
       const programme = asObject(row.programmes) ?? {};
@@ -651,13 +662,19 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
         verified: displayDate(
           typeof programme.verified_at === "string"
             ? programme.verified_at
-            : null,
+            : typeof programme.ai_reviewed_at === "string"
+              ? programme.ai_reviewed_at
+              : null,
         ),
         logo: programmeCode(university),
         tone: toneFor(String(row.programme_id)),
         reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
         checks: Array.isArray(row.checks) ? (row.checks as Check[]) : [],
         programmeVerified: programme.verification_status === "verified",
+        programmeReviewStatus:
+          programme.verification_status === "verified"
+            ? "verified"
+            : "ai_reviewed",
         source: String(programme.source_url ?? ""),
         generatedAt: String(row.generated_at ?? ""),
       };
@@ -1056,8 +1073,7 @@ export async function loadUniversities(): Promise<University[]> {
   }));
 }
 
-// Runs the deterministic engine for one student against every published programme.
-// Only counsellor-confirmed facts are used; unverified programmes are flagged, never final.
+// Runs the deterministic engine against evidence-backed AI-reviewed or human-verified rules.
 export async function runStudentMatch(workspaceId: string, studentId: string) {
   const supabase = createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -1079,7 +1095,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
         .select(
           "id, university_id, requirements, application_deadline, verification_status",
         )
-        .eq("verification_status", "verified"),
+        .in("verification_status", ["ai_reviewed", "verified"]),
       supabase
         .from("universities")
         .select("id, ects_per_credit_hour, grade_pass_ratio"),
@@ -1096,9 +1112,12 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     throw new Error(
       "Review and confirm the student’s academic profile before matching.",
     );
-  if (!programmesResult.data?.length)
+  const usableProgrammes = (programmesResult.data ?? []).filter((programme) =>
+    hasEligibilityRules(normalizeRules(programme.requirements)),
+  );
+  if (!usableProgrammes.length)
     throw new Error(
-      "No programmes have human-verified admission rules yet. Verify programme rules before matching.",
+      "No programmes have evidence-backed AI-reviewed or verified admission rules yet.",
     );
 
   const conversions = new Map(
@@ -1127,7 +1146,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
       })),
   };
 
-  const rows = programmesResult.data.map((programme) => {
+  const rows = usableProgrammes.map((programme) => {
     const rules = normalizeRules(programme.requirements);
     const conversion =
       conversions.get(String(programme.university_id)) ?? DEFAULT_CONVERSION;
@@ -1332,7 +1351,8 @@ export type ProgrammeInput = {
   notes: string;
   evidence: { field: string; quote: string }[];
   rules: ProgrammeRules;
-  status: "unverified" | "in_review" | "verified";
+  status: "unverified" | "in_review" | "ai_reviewed" | "verified";
+  aiConfidence?: number | null;
 };
 
 /** Verifier tool: saves a programme. Marking it verified stamps who checked it and when. */
@@ -1343,10 +1363,12 @@ export async function saveProgramme(input: ProgrammeInput) {
     throw new Error("Your session expired. Please sign in again.");
   if (!input.source.trim())
     throw new Error("Add the source link you checked the rules against.");
-  if (input.status === "verified" && !hasEligibilityRules(input.rules))
+  if (["ai_reviewed", "verified"].includes(input.status) && !hasEligibilityRules(input.rules))
     throw new Error(
-      "Add at least one admission requirement before marking this programme verified.",
+      "Add at least one admission requirement before publishing this programme.",
     );
+  if (input.status === "ai_reviewed" && ((input.aiConfidence ?? 0) < 70 || !input.evidence.length))
+    throw new Error("AI review needs at least 70% confidence and quoted source evidence.");
   const now = new Date().toISOString();
   const row = {
     university_id: input.universityId,
@@ -1371,6 +1393,9 @@ export async function saveProgramme(input: ProgrammeInput) {
     review_started_at:
       input.status === "unverified" ? null : now,
     source_checked_at: input.status === "verified" ? now : null,
+    ai_reviewed_at: input.status === "ai_reviewed" ? now : null,
+    ai_confidence: input.status === "ai_reviewed" ? input.aiConfidence : null,
+    ai_review_model: input.status === "ai_reviewed" ? "gemini-3.8-flash" : null,
     verified_at: input.status === "verified" ? now : null,
     verified_by: input.status === "verified" ? authData.user.id : null,
   };
@@ -1378,6 +1403,25 @@ export async function saveProgramme(input: ProgrammeInput) {
     ? await supabase.from("programmes").update(row).eq("id", input.id)
     : await supabase.from("programmes").insert(row);
   if (error) throw error;
+}
+
+export async function aiReviewProgramme(programmeId: string): Promise<{
+  status: "ai_reviewed" | "in_review";
+  confidence: number;
+}> {
+  const response = await fetch("/api/programmes/ai-review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ programmeId }),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    status?: "ai_reviewed" | "in_review";
+    confidence?: number;
+    error?: string;
+  };
+  if (!response.ok || !body.status)
+    throw new Error(body.error ?? "AI review failed.");
+  return { status: body.status, confidence: body.confidence ?? 0 };
 }
 
 /** Verifier tool: per-university conversion rules used by every programme there. */

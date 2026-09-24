@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, CircleAlert, ExternalLink, Plus, Quote, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { Check, CircleAlert, ExternalLink, Plus, Quote, Sparkles, Trash2, X } from "lucide-react";
 import type { ProgrammeDraft } from "@/lib/ai/schemas";
 import { DEFAULT_CONVERSION, hasEligibilityRules, SUBJECT_AREAS, type Conversion } from "@/lib/matching/engine";
 import { messageOf, type Programme, type ProgrammeInput, type University } from "@/lib/supabase/workspace-data";
@@ -174,6 +174,7 @@ export function ProgrammeEditor({
           notes,
           evidence,
           status,
+          aiConfidence: draft?.confidence ?? null,
           rules: currentRules,
         },
         university && ectsValue && ratioValue && (ectsValue !== university.conversion.ectsPerCreditHour || ratioValue !== university.conversion.passRatio)
@@ -191,8 +192,8 @@ export function ProgrammeEditor({
       <div className="wizard editor-modal" role="dialog" aria-modal="true" aria-labelledby="programme-editor-title">
         <header>
           <div>
-            <p className="eyebrow">PROGRAMME VERIFICATION</p>
-            <h2 id="programme-editor-title">{programme ? `Verify ${programme.programme}` : "Add a programme"}</h2>
+            <p className="eyebrow">AI PROGRAMME REVIEW</p>
+            <h2 id="programme-editor-title">{programme ? `Review ${programme.programme}` : "Add a programme"}</h2>
           </div>
           <button onClick={onClose} aria-label="Close editor">
             <X size={20} />
@@ -215,11 +216,11 @@ export function ProgrammeEditor({
               <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={5} placeholder="Paste the admission requirements section…" />
             </label>
             <button className="outline-button" disabled={drafting || (!source.trim() && !pasted.trim())} onClick={() => void runDraft()}>
-              {drafting ? <span className="spinner dark" /> : <Sparkles size={15} />} {drafting ? "Reading source…" : "Draft rules with AI"}
+              {drafting ? <span className="spinner dark" /> : <Sparkles size={15} />} {drafting ? "Reading source…" : "Read source with AI"}
             </button>
             {(evidence.length > 0 || draft?.notes) && (
               <div className="evidence">
-                <p className="eyebrow">EVIDENCE FROM SOURCE</p>
+                <p className="eyebrow">AI EVIDENCE · {draft?.confidence ?? 0}% CONFIDENCE</p>
                 {evidence.map((item, index) => (
                   <blockquote key={`${item.field}-${index}`}>
                     <Quote size={12} />
@@ -228,7 +229,7 @@ export function ProgrammeEditor({
                     </span>
                   </blockquote>
                 ))}
-                {!evidence.length && <p className="review-muted">No quotes returned. Check every field against the source.</p>}
+                {!evidence.length && <p className="review-muted">No supporting quotes returned, so this cannot be published for matching.</p>}
                 {draft?.notes && <p className="review-muted">{draft.notes}</p>}
               </div>
             )}
@@ -329,14 +330,14 @@ export function ProgrammeEditor({
         </div>
         <footer>
           <span className="review-footnote">
-            <ShieldCheck size={15} /> Marking verified records you and today’s date against these rules.
+            <Sparkles size={15} /> AI-reviewed rules are provisional and stay distinct from human verification.
           </span>
           <div className="review-actions">
             <button className="secondary-button" disabled={Boolean(saving)} onClick={() => void save("in_review")}>
-              {saving === "in_review" ? <span className="spinner dark" /> : null} Save for review
+              {saving === "in_review" ? <span className="spinner dark" /> : null} Save draft
             </button>
-            <button className="primary-button" disabled={Boolean(saving)} onClick={() => void save("verified")}>
-              {saving === "verified" ? <span className="spinner" /> : <ShieldCheck size={16} />} Save and mark verified
+            <button className="primary-button" disabled={Boolean(saving) || !draft || (draft.confidence ?? 0) < 70 || !evidence.length} onClick={() => void save("ai_reviewed")}>
+              {saving === "ai_reviewed" ? <span className="spinner" /> : <Sparkles size={16} />} Publish AI-reviewed
             </button>
           </div>
         </footer>

@@ -23,6 +23,7 @@ import { ShortlistReport } from "@/components/ShortlistReport";
 import { hasEligibilityRules } from "@/lib/matching/engine";
 import {
   createApplicationFromMatch,
+  aiReviewProgramme,
   deleteStudent,
   messageOf,
   createStudent,
@@ -887,6 +888,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               universities={universities}
               isVerifier={isVerifier}
               onEdit={setEditingProgramme}
+              onAiReview={async (programme) => {
+                const result = await aiReviewProgramme(programme.id);
+                await refresh();
+                return result;
+              }}
               onNotify={notify}
             />
           )}
@@ -1006,9 +1012,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             await refresh();
             setEditingProgramme(null);
             notify(
-              input.status === "verified"
-                ? `${input.programme} verified`
-                : `${input.programme} saved for review`,
+              input.status === "ai_reviewed"
+                ? `${input.programme} published as AI-reviewed`
+                : input.status === "verified"
+                  ? `${input.programme} verified`
+                  : `${input.programme} saved as a draft`,
             );
           }}
         />
@@ -1037,7 +1045,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
                   "Score",
                   "Tuition",
                   "Deadline",
-                  "Rules verified",
+                  "Rule review",
                   "Checks",
                   "Source",
                 ],
@@ -1049,7 +1057,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
                   m.score,
                   m.fee,
                   m.deadline,
-                  m.programmeVerified ? m.verified : "Not verified",
+                  `${m.programmeVerified ? "Human verified" : "AI reviewed"} ${m.verified}`,
                   m.reasons.join("; "),
                   m.source,
                 ]),
@@ -1732,7 +1740,7 @@ function MatchesView({
         <PageTitle
           eyebrow="ELIGIBILITY ENGINE"
           title="Match centre"
-          text="Add a student before running verified programme matching."
+          text="Add a student before running reviewed programme matching."
         />
         <div className="panel empty-state">
           <Users size={28} />
@@ -1748,7 +1756,7 @@ function MatchesView({
       <PageTitle
         eyebrow="ELIGIBILITY ENGINE"
         title="Match centre"
-        text="Only human-verified programme rules are matched. Every result comes from fixed rules, never AI guesses."
+        text="Evidence-backed AI-reviewed and human-verified rules are matched by the deterministic engine. AI-reviewed results remain provisional."
       >
         <button
           className="secondary-button"
@@ -1906,9 +1914,8 @@ function MatchesView({
                       <ShieldCheck size={12} /> Rules verified {match.verified}
                     </span>
                   ) : (
-                    <span className="unverified-label">
-                      <CircleAlert size={12} /> Unverified rules: check the
-                      source before advising
+                    <span className="fresh-label">
+                      <Sparkles size={12} /> AI reviewed {match.verified} · provisional
                     </span>
                   )}
                 </div>
@@ -2004,7 +2011,7 @@ function MatchesView({
               {studentMatches.length
                 ? "Choose another result filter."
                 : student.academic.confirmedAt
-                  ? "Run a new match against programmes with human-verified admission rules."
+                  ? "Run a new match against evidence-backed AI-reviewed or verified rules."
                   : "Review and confirm the student’s profile, then run a match."}
             </span>
           </div>
@@ -2020,6 +2027,13 @@ function ProgrammeStatus({ programme }: { programme: Programme }) {
       <span className="fresh-cell">
         <ShieldCheck size={13} />
         {programme.freshness}
+      </span>
+    );
+  if (programme.status === "ai_reviewed")
+    return (
+      <span className="fresh-cell">
+        <Sparkles size={13} />
+        AI reviewed · {programme.aiConfidence ?? 0}%
       </span>
     );
   return (
@@ -2051,12 +2065,14 @@ function ProgrammesView({
   universities,
   isVerifier,
   onEdit,
+  onAiReview,
   onNotify,
 }: {
   programmes: Programme[];
   universities: University[];
   isVerifier: boolean;
   onEdit: (programme: Programme | "new") => void;
+  onAiReview: (programme: Programme) => Promise<{ status: "ai_reviewed" | "in_review"; confidence: number }>;
   onNotify: (message: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -2065,6 +2081,7 @@ function ProgrammesView({
   );
   const [levelFilter, setLevelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [aiReviewing, setAiReviewing] = useState({ done: 0, total: 0 });
   const queueMode = statusFilter === "queue";
   const visible = programmes
     .filter((programme) => {
@@ -2079,7 +2096,7 @@ function ProgrammesView({
         (levelFilter === "master" && level === "master") ||
         (levelFilter === "single-cycle" && level.includes("single"));
       const matchesStatus = queueMode
-        ? programme.status !== "verified"
+        ? !["ai_reviewed", "verified"].includes(programme.status)
         : statusFilter === "all" || programme.status === statusFilter;
       return matchesQuery && matchesLevel && matchesStatus;
     })
@@ -2103,13 +2120,35 @@ function ProgrammesView({
   const verified = programmes.filter(
     (programme) => programme.status === "verified",
   ).length;
+  const aiReviewed = programmes.filter(
+    (programme) => programme.status === "ai_reviewed",
+  ).length;
   const inReview = programmes.filter(
     (programme) => programme.status === "in_review",
   ).length;
   const stale = programmes.filter((programme) =>
     ["stale", "unverified"].includes(programme.status),
   ).length;
-  const queueCount = programmes.length - verified;
+  const queueCount = programmes.length - verified - aiReviewed;
+  const reviewWithAi = async () => {
+    const candidates = visible
+      .filter((programme) => !["ai_reviewed", "verified"].includes(programme.status))
+      .slice(0, 5);
+    if (!candidates.length) return;
+    setAiReviewing({ done: 0, total: candidates.length });
+    let published = 0;
+    for (let index = 0; index < candidates.length; index += 1) {
+      try {
+        const result = await onAiReview(candidates[index]);
+        if (result.status === "ai_reviewed") published += 1;
+      } catch (error) {
+        onNotify(messageOf(error) ?? `Could not AI-review ${candidates[index].programme}`);
+      }
+      setAiReviewing({ done: index + 1, total: candidates.length });
+    }
+    setAiReviewing({ done: 0, total: 0 });
+    onNotify(`${published} of ${candidates.length} programmes passed automated review`);
+  };
   const catalogueTabs = (
     <div className="tab-bar" role="tablist" aria-label="Catalogue view">
       <button
@@ -2279,7 +2318,7 @@ function ProgrammesView({
   return (
     <>
       <PageTitle
-        eyebrow="VERIFIED DATABASE"
+        eyebrow="ADMISSIONS DATABASE"
         title="Programmes"
         text="Current entry rules, tuition, and deadlines, linked to primary sources."
       >
@@ -2325,6 +2364,14 @@ function ProgrammesView({
             >
               <ListChecks size={16} /> Review queue ({queueCount})
             </button>
+            <button
+              className="primary-button"
+              disabled={Boolean(aiReviewing.total) || !queueCount}
+              onClick={() => void reviewWithAi()}
+            >
+              {aiReviewing.total ? <span className="spinner" /> : <Sparkles size={16} />}
+              {aiReviewing.total ? `AI reviewing ${aiReviewing.done}/${aiReviewing.total}` : "AI review next 5"}
+            </button>
             <button className="primary-button" onClick={() => onEdit("new")}>
               <Plus size={17} /> Add programme
             </button>
@@ -2337,7 +2384,7 @@ function ProgrammesView({
           <div>
             <ListChecks size={21} />
             <span>
-              <strong>Programme verification queue</strong>
+              <strong>Automated programme review queue</strong>
               <small>
                 In-review records appear first, followed by the most complete catalogue records.
               </small>
@@ -2348,7 +2395,7 @@ function ProgrammesView({
             disabled={!visible.length}
             onClick={() => visible[0] && onEdit(visible[0])}
           >
-            Review next programme <ArrowRight size={15} />
+            Open next programme <ArrowRight size={15} />
           </button>
         </div>
       )}
@@ -2359,13 +2406,15 @@ function ProgrammesView({
         <div>
           <strong>Programme catalogue</strong>
           <span>
-            {verified} of {programmes.length} programmes checked against their
-            official admissions call
+            {verified + aiReviewed} of {programmes.length} programmes reviewed against linked sources
           </span>
         </div>
         <div className="database-stats">
           <span>
             <b>{verified}</b> verified
+          </span>
+          <span>
+            <b>{aiReviewed}</b> AI reviewed
           </span>
           <span className="warn">
             <b>{inReview}</b> in review
@@ -2421,6 +2470,7 @@ function ProgrammesView({
             <option value="all">All data statuses</option>
             {isVerifier && <option value="queue">Review queue</option>}
             <option value="verified">Verified</option>
+            <option value="ai_reviewed">AI reviewed</option>
             <option value="in_review">In review</option>
             <option value="unverified">Needs verification</option>
             <option value="stale">Stale</option>
@@ -2495,7 +2545,7 @@ function ProgrammesView({
                   className="outline-button"
                   onClick={() => onEdit(programme)}
                 >
-                  {programme.status === "verified" ? "Edit" : "Verify"}
+                  {["ai_reviewed", "verified"].includes(programme.status) ? "Edit" : "Review"}
                 </button>
               </span>
             </div>

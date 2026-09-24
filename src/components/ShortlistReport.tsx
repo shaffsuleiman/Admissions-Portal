@@ -7,8 +7,7 @@ import type { MatchResult, Student, TeamMember, Workspace } from "@/lib/supabase
 
 const outcomeIcon = { pass: Check, borderline: AlertTriangle, fail: X } as const;
 
-// Printable, consultancy-branded shortlist. Only programmes with verified rules are
-// included; the browser's print dialog saves it as a PDF.
+// Printable, consultancy-branded shortlist. Only evidence-backed reviewed rules are included.
 export function ShortlistReport({
   workspace,
   counsellor,
@@ -34,10 +33,10 @@ export function ShortlistReport({
     };
   }, [onClose]);
 
-  const verified = matches.filter((match) => match.programmeVerified);
-  const eligible = verified.filter((match) => match.status === "Eligible").sort((a, b) => b.score - a.score);
-  const borderline = verified.filter((match) => match.status === "Borderline").sort((a, b) => b.score - a.score);
-  const excluded = matches.length - verified.length;
+  const reviewed = matches.filter((match) => ["ai_reviewed", "verified"].includes(match.programmeReviewStatus));
+  const eligible = reviewed.filter((match) => match.status === "Eligible").sort((a, b) => b.score - a.score);
+  const borderline = reviewed.filter((match) => match.status === "Borderline").sort((a, b) => b.score - a.score);
+  const excluded = matches.length - reviewed.length;
   const academic = student.academic;
   const grade110 = academic.cgpa != null && academic.cgpaScale ? toItalian110(academic.cgpa, academic.cgpaScale) : null;
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -57,7 +56,7 @@ export function ShortlistReport({
       <dl className="report-facts">
         <div><dt>Tuition / year</dt><dd>{match.fee}</dd></div>
         <div><dt>Application deadline</dt><dd>{match.deadline}</dd></div>
-        <div><dt>Rules verified</dt><dd>{match.verified}</dd></div>
+        <div><dt>Rules reviewed</dt><dd>{match.programmeVerified ? "Human verified" : "AI reviewed"} · {match.verified}</dd></div>
       </dl>
       <ul className="report-checks">
         {(match.checks.length ? match.checks : match.reasons.map((detail) => ({ outcome: "pass" as const, detail, label: "", key: "extras" as const }))).map((check, index) => {
@@ -77,7 +76,7 @@ export function ShortlistReport({
     <div className="report-overlay" role="dialog" aria-modal="true" aria-label={`Shortlist report for ${student.name}`}>
       <div className="report-toolbar">
         <strong>Shortlist report</strong>
-        <span>{verified.length} verified programme{verified.length === 1 ? "" : "s"}</span>
+        <span>{reviewed.length} reviewed programme{reviewed.length === 1 ? "" : "s"}</span>
         <button className="secondary-button" onClick={onCsv}>
           <Download size={15} /> CSV
         </button>
@@ -114,7 +113,7 @@ export function ShortlistReport({
 
         <h2 className="report-heading">Eligible programmes ({eligible.length})</h2>
         {eligible.map((match, index) => programme(match, index + 1))}
-        {!eligible.length && <p className="report-empty">No verified programme is fully eligible yet.</p>}
+        {!eligible.length && <p className="report-empty">No reviewed programme is fully eligible yet.</p>}
 
         {borderline.length > 0 && (
           <>
@@ -126,7 +125,7 @@ export function ShortlistReport({
 
         <footer className="report-footer">
           <p>
-            Prepared by {counsellor.name} on {today}. Eligibility is checked against each programme’s published rules, with the source and verification date shown above. This shortlist is advisory: final admission decisions rest with each university.
+            Prepared by {counsellor.name} on {today}. Eligibility is checked against published rules. AI-reviewed entries are provisional and identified above. This shortlist is advisory: final admission decisions rest with each university.
           </p>
           {excluded > 0 && <p>{excluded} programme{excluded === 1 ? "" : "s"} with unverified rules {excluded === 1 ? "is" : "are"} not included.</p>}
         </footer>

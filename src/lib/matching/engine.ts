@@ -96,7 +96,7 @@ function compare(actual: number, required: number): CheckOutcome {
   return actual >= required * (1 - BORDERLINE_MARGIN) ? "borderline" : "fail";
 }
 
-/** A verified programme must contain at least one actual admissions rule. */
+/** A matchable programme must contain at least one actual admissions rule. */
 export function hasEligibilityRules(rules: ProgrammeRules) {
   return Boolean(
     rules.minYearsOfEducation ||

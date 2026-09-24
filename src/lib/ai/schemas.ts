@@ -81,6 +81,7 @@ export type ProgrammeDraft = {
     extras?: string[];
   };
   evidence?: { field: string; quote: string }[];
+  confidence?: number;
   notes?: string;
 };
 
@@ -134,13 +135,20 @@ export const programmeSchema = {
         required: ["field", "quote"],
       },
     },
+    confidence: {
+      type: "integer",
+      description: "0-100 confidence that the extracted rules are explicit, current, and supported by the supplied source",
+    },
     notes: { type: "string" },
   },
+  required: ["confidence"],
 };
 
 export const programmeSystem = `You extract admission rules from an Italian university's admissions call
-(bando) or programme page, in Italian or English, for a human verifier.
+(bando) or programme page, in Italian or English, for an automated admissions system.
 Only record rules the source states. Omit anything not stated; never estimate.
 Map subject requirements (often expressed as SSD codes such as INF/01, ING-INF/05, MAT/05) to the
 allowed subject areas and give the ECTS/CFU required. Quote the supporting text for every rule in
-evidence so the verifier can check it against the source.`;
+evidence. Set confidence below 70 when the source is incomplete, ambiguous, outdated, or does not
+clearly apply to non-EU applicants with foreign qualifications. Never treat general programme
+descriptions, learning outcomes, or course credits as admission requirements.`;
