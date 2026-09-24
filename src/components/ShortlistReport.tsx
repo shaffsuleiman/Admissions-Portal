@@ -54,6 +54,7 @@ export function ShortlistReport({
         <span className={`report-pill ${match.status === "Eligible" ? "good" : "warn"}`}>{match.status}</span>
       </div>
       <dl className="report-facts">
+        <div><dt>Rank score</dt><dd>{match.score}/100</dd></div>
         <div><dt>Tuition / year</dt><dd>{match.fee}</dd></div>
         <div><dt>Application deadline</dt><dd>{match.deadline}</dd></div>
         <div><dt>Rules reviewed</dt><dd>{match.programmeVerified ? "Human verified" : "AI reviewed"} · {match.verified}</dd></div>

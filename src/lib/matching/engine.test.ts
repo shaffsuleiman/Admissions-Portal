@@ -20,7 +20,7 @@ const today = new Date("2026-09-23T12:00:00");
 test("converts CGPA to the Italian 110 scale (plan example: 3.2 / 4.0 → 92.4)", () => {
   assert.equal(toItalian110(3.2, 4), 92.4);
   assert.equal(toItalian110(4, 4), 110);
-  assert.equal(toItalian110(1.5, 4), 66);
+  assert.equal(toItalian110(1.5, 4), 55);
 });
 
 test("credit hours convert per university and report the exact shortfall", () => {
@@ -61,8 +61,69 @@ test("closed deadlines fail and near deadlines are flagged", () => {
 test("a programme with no admissions rules is never silently eligible", () => {
   const result = evaluate(student(), {}, { today });
   assert.equal(result.result, "borderline");
-  assert.equal(result.score, 92);
+  assert.equal(result.score, 40);
   assert.match(result.checks[0].detail, /manual verification/i);
+});
+
+test("unsupported English tests are never compared against the IELTS scale", () => {
+  const result = evaluate(
+    student({ englishTest: { type: "PTE", score: 70 } }),
+    { english: { ielts: 6.5, toefl: 90 } },
+    { today },
+  );
+  assert.equal(result.result, "borderline");
+  assert.match(result.checks[0].detail, /only states IELTS 6.5 or TOEFL 90/);
+});
+
+test("ranking rewards margin above requirements", () => {
+  const rules = { minGrade110: 90, subjectCredits: [{ area: "Mathematics", ects: 18 }] };
+  const justMeets = evaluate(student({ cgpa: 3.1 }), rules, { today });
+  const stronger = evaluate(student({ cgpa: 3.8, credits: [{ area: "Mathematics", creditHours: 15, ects: null }] }), rules, { today });
+  assert.equal(justMeets.result, "eligible");
+  assert.equal(stronger.result, "eligible");
+  assert.ok(stronger.score > justMeets.score);
+});
+
+test("budget and intake rank fit without changing academic eligibility", () => {
+  const rules = { minYearsOfEducation: 16 };
+  const goodFit = evaluate(student(), rules, {
+    today,
+    annualTuitionEur: 3_000,
+    annualBudgetEur: 8_000,
+    programmeIntake: "Fall 2027",
+    targetIntake: "September 2027",
+  });
+  const poorFit = evaluate(student(), rules, {
+    today,
+    annualTuitionEur: 12_000,
+    annualBudgetEur: 8_000,
+    programmeIntake: "Spring 2028",
+    targetIntake: "September 2027",
+  });
+  assert.equal(poorFit.result, "eligible");
+  assert.ok(goodFit.score > poorFit.score);
+  assert.equal(poorFit.checks.find((check) => check.key === "budget")?.category, "preference");
+});
+
+test("production matching treats an unknown deadline as uncertain", () => {
+  const result = evaluate(student(), { minYearsOfEducation: 16 }, { today, requireDeadline: true });
+  assert.equal(result.result, "borderline");
+  assert.match(result.checks.find((check) => check.key === "deadline")?.detail ?? "", /not recorded/);
+});
+
+test("invalid CGPA values cannot produce an eligible result", () => {
+  const result = evaluate(student({ cgpa: 4.5, cgpaScale: 4 }), { minGrade110: 90 }, { today });
+  assert.equal(result.result, "borderline");
+  assert.match(result.checks[0].detail, /invalid/);
+});
+
+test("eligible results always rank above borderline and failed results", () => {
+  const eligible = evaluate(student(), { minYearsOfEducation: 16 }, { today });
+  const borderline = evaluate(student({ yearsOfEducation: null }), { minYearsOfEducation: 16 }, { today });
+  const failed = evaluate(student({ yearsOfEducation: 12 }), { minYearsOfEducation: 16 }, { today });
+  assert.ok(eligible.score >= 70);
+  assert.ok(borderline.score >= 40 && borderline.score < 70);
+  assert.ok(failed.score < 40);
 });
 
 test("missing data is borderline so a counsellor looks, never silently eligible", () => {

@@ -146,6 +146,8 @@ export type MatchResult = {
   city: string;
   status: string;
   score: number;
+  eligibilityScore: number;
+  fitScore: number | null;
   fee: string;
   deadline: string;
   verified: string;
@@ -637,6 +639,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
     )
     .map((row) => {
       const programme = asObject(row.programmes) ?? {};
+      const snapshot = asObject(row.rules_snapshot) ?? {};
       const university = String(
         programme.university_name ?? "Unknown university",
       );
@@ -649,6 +652,9 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
         city: String(programme.city ?? "Not set"),
         status: matchLabels[String(row.result)] ?? String(row.result),
         score: Number(row.score ?? 0),
+        eligibilityScore:
+          numberOrNull(snapshot.eligibility_score) ?? Number(row.score ?? 0),
+        fitScore: numberOrNull(snapshot.fit_score),
         fee: euro(
           typeof programme.annual_tuition_eur === "number"
             ? programme.annual_tuition_eur
@@ -1079,7 +1085,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user)
     throw new Error("Your session expired. Please sign in again.");
-  const [academicResult, creditsResult, programmesResult, universitiesResult] =
+  const [academicResult, creditsResult, programmesResult, universitiesResult, studentResult] =
     await Promise.all([
       supabase
         .from("academic_profiles")
@@ -1093,16 +1099,22 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
       supabase
         .from("programmes")
         .select(
-          "id, university_id, requirements, application_deadline, verification_status",
+          "id, university_id, requirements, application_deadline, verification_status, annual_tuition_eur, intake, ai_confidence",
         )
         .in("verification_status", ["ai_reviewed", "verified"]),
       supabase
         .from("universities")
         .select("id, ects_per_credit_hour, grade_pass_ratio"),
+      supabase
+        .from("students")
+        .select("annual_budget_eur, target_intake")
+        .eq("id", studentId)
+        .single(),
     ]);
   if (academicResult.error) throw academicResult.error;
   if (creditsResult.error) throw creditsResult.error;
   if (programmesResult.error) throw programmesResult.error;
+  if (studentResult.error) throw studentResult.error;
   const academic = academicResult.data;
   if (!academic)
     throw new Error(
@@ -1153,6 +1165,15 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     const evaluation = evaluate(student, rules, {
       conversion,
       deadline: programme.application_deadline,
+      requireDeadline: true,
+      annualTuitionEur: numberOrNull(programme.annual_tuition_eur),
+      annualBudgetEur: numberOrNull(studentResult.data.annual_budget_eur),
+      programmeIntake: String(programme.intake ?? ""),
+      targetIntake: String(studentResult.data.target_intake ?? ""),
+      dataConfidence:
+        programme.verification_status === "verified"
+          ? 100
+          : numberOrNull(programme.ai_confidence),
     });
     return {
       workspace_id: workspaceId,
@@ -1166,6 +1187,12 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
         rules: serializeRules(rules),
         conversion,
         verification_status: programme.verification_status,
+        data_confidence:
+          programme.verification_status === "verified"
+            ? 100
+            : numberOrNull(programme.ai_confidence),
+        eligibility_score: evaluation.eligibilityScore,
+        fit_score: evaluation.fitScore,
         student,
       },
       generated_at: new Date().toISOString(),

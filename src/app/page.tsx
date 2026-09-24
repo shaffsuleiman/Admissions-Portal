@@ -1043,6 +1043,8 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
                   "City",
                   "Result",
                   "Score",
+                  "Eligibility score",
+                  "Preference fit",
                   "Tuition",
                   "Deadline",
                   "Rule review",
@@ -1055,6 +1057,8 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
                   m.city,
                   m.status,
                   m.score,
+                  m.eligibilityScore,
+                  m.fitScore ?? "Not scored",
                   m.fee,
                   m.deadline,
                   `${m.programmeVerified ? "Human verified" : "AI reviewed"} ${m.verified}`,
@@ -1941,7 +1945,7 @@ function MatchesView({
                   {match.score}
                   <small>%</small>
                 </strong>
-                <span>match score</span>
+                <span>rank score</span>
               </div>
             </div>
             <div className="rule-bar">
