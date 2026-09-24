@@ -116,6 +116,9 @@ export type Programme = {
   degreeClass: string;
   cataloguedAt: string | null;
   verifiedAt: string | null;
+  reviewStartedAt: string | null;
+  sourceCheckedAt: string | null;
+  evidence: { field: string; quote: string }[];
   notes: string;
   rules: ProgrammeRules;
 };
@@ -374,6 +377,20 @@ function mapProgramme(row: Record<string, unknown>): Programme {
         ? row.catalogue_checked_at
         : null,
     verifiedAt,
+    reviewStartedAt:
+      typeof row.review_started_at === "string"
+        ? row.review_started_at
+        : null,
+    sourceCheckedAt:
+      typeof row.source_checked_at === "string"
+        ? row.source_checked_at
+        : null,
+    evidence: asArray(row.verification_evidence)
+      .map((item) => ({
+        field: String(item.field ?? ""),
+        quote: String(item.quote ?? ""),
+      }))
+      .filter((item) => item.field && item.quote),
     notes: String(row.verification_notes ?? ""),
     rules: normalizeRules(row.requirements),
   };
@@ -1313,6 +1330,7 @@ export type ProgrammeInput = {
   source: string;
   academicYear: string;
   notes: string;
+  evidence: { field: string; quote: string }[];
   rules: ProgrammeRules;
   status: "unverified" | "in_review" | "verified";
 };
@@ -1329,6 +1347,7 @@ export async function saveProgramme(input: ProgrammeInput) {
     throw new Error(
       "Add at least one admission requirement before marking this programme verified.",
     );
+  const now = new Date().toISOString();
   const row = {
     university_id: input.universityId,
     university_name: input.university.trim(),
@@ -1344,9 +1363,15 @@ export async function saveProgramme(input: ProgrammeInput) {
     source_url: input.source.trim(),
     academic_year: input.academicYear.trim(),
     requirements: serializeRules(input.rules),
+    verification_evidence: input.evidence,
     verification_notes: input.notes.trim() || null,
     verification_status: input.status,
-    verified_at: input.status === "verified" ? new Date().toISOString() : null,
+    review_assigned_to:
+      input.status === "unverified" ? null : authData.user.id,
+    review_started_at:
+      input.status === "unverified" ? null : now,
+    source_checked_at: input.status === "verified" ? now : null,
+    verified_at: input.status === "verified" ? now : null,
     verified_by: input.status === "verified" ? authData.user.id : null,
   };
   const { error } = input.id

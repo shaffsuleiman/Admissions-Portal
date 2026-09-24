@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Plus, Quote, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { Check, CircleAlert, ExternalLink, Plus, Quote, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import type { ProgrammeDraft } from "@/lib/ai/schemas";
-import { DEFAULT_CONVERSION, SUBJECT_AREAS, type Conversion } from "@/lib/matching/engine";
+import { DEFAULT_CONVERSION, hasEligibilityRules, SUBJECT_AREAS, type Conversion } from "@/lib/matching/engine";
 import { messageOf, type Programme, type ProgrammeInput, type University } from "@/lib/supabase/workspace-data";
 
 const toNumber = (value: string) => (value.trim() === "" || Number.isNaN(Number(value)) ? null : Number(value));
@@ -58,6 +58,7 @@ export function ProgrammeEditor({
   const [passRatio, setPassRatio] = useState(text(university?.conversion.passRatio ?? DEFAULT_CONVERSION.passRatio));
   const [pasted, setPasted] = useState("");
   const [draft, setDraft] = useState<ProgrammeDraft | null>(null);
+  const [evidence, setEvidence] = useState(programme?.evidence ?? []);
   const [drafting, setDrafting] = useState(false);
   const [saving, setSaving] = useState("");
   const [error, setError] = useState("");
@@ -84,6 +85,7 @@ export function ProgrammeEditor({
     try {
       const result = await onDraft(pasted.trim() ? { text: pasted } : { sourceUrl: source });
       setDraft(result);
+      setEvidence(result.evidence ?? []);
       const set = (value: unknown, setter: (value: string) => void) => value != null && value !== "" && setter(String(value));
       set(result.programme_name, setName);
       set(result.city, setCity);
@@ -115,6 +117,37 @@ export function ProgrammeEditor({
     }
   };
 
+  const currentRules = {
+    minYearsOfEducation: toNumber(minYears),
+    minGrade110: toNumber(min110),
+    minCgpa4: toNumber(minCgpa),
+    subjectCredits: credits
+      .map((credit) => ({
+        area: credit.area,
+        ects: toNumber(credit.ects) ?? 0,
+      }))
+      .filter((credit) => credit.ects > 0),
+    english: {
+      ielts: toNumber(ielts),
+      toefl: toNumber(toefl),
+      mediumOfInstructionAccepted: moi,
+    },
+    extras: extras
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  };
+  const checklist = [
+    { label: "Primary source", complete: Boolean(source.trim()) },
+    { label: "Admission rule", complete: hasEligibilityRules(currentRules) },
+    { label: "Academic year", complete: Boolean(academicYear.trim()) },
+    { label: "Tuition", complete: toNumber(fee) != null },
+    { label: "Deadline", complete: Boolean(deadline) },
+    { label: "Application link", complete: Boolean(applicationUrl.trim()) },
+    { label: "Quoted evidence", complete: evidence.length > 0 },
+  ];
+  const completedChecks = checklist.filter((item) => item.complete).length;
+
   const save = async (status: ProgrammeInput["status"]) => {
     setError("");
     if (!universityName.trim() || !name.trim()) return setError("Add the university and programme name.");
@@ -139,15 +172,9 @@ export function ProgrammeEditor({
           source,
           academicYear,
           notes,
+          evidence,
           status,
-          rules: {
-            minYearsOfEducation: toNumber(minYears),
-            minGrade110: toNumber(min110),
-            minCgpa4: toNumber(minCgpa),
-            subjectCredits: credits.map((credit) => ({ area: credit.area, ects: toNumber(credit.ects) ?? 0 })).filter((credit) => credit.ects > 0),
-            english: { ielts: toNumber(ielts), toefl: toNumber(toefl), mediumOfInstructionAccepted: moi },
-            extras: extras.split(",").map((item) => item.trim()).filter(Boolean),
-          },
+          rules: currentRules,
         },
         university && ectsValue && ratioValue && (ectsValue !== university.conversion.ectsPerCreditHour || ratioValue !== university.conversion.passRatio)
           ? { universityId, conversion: { ectsPerCreditHour: ectsValue, passRatio: ratioValue } }
@@ -190,10 +217,10 @@ export function ProgrammeEditor({
             <button className="outline-button" disabled={drafting || (!source.trim() && !pasted.trim())} onClick={() => void runDraft()}>
               {drafting ? <span className="spinner dark" /> : <Sparkles size={15} />} {drafting ? "Reading source…" : "Draft rules with AI"}
             </button>
-            {draft && (
+            {(evidence.length > 0 || draft?.notes) && (
               <div className="evidence">
                 <p className="eyebrow">EVIDENCE FROM SOURCE</p>
-                {(draft.evidence ?? []).map((item, index) => (
+                {evidence.map((item, index) => (
                   <blockquote key={`${item.field}-${index}`}>
                     <Quote size={12} />
                     <span>
@@ -201,10 +228,28 @@ export function ProgrammeEditor({
                     </span>
                   </blockquote>
                 ))}
-                {!draft.evidence?.length && <p className="review-muted">No quotes returned. Check every field against the source.</p>}
-                {draft.notes && <p className="review-muted">{draft.notes}</p>}
+                {!evidence.length && <p className="review-muted">No quotes returned. Check every field against the source.</p>}
+                {draft?.notes && <p className="review-muted">{draft.notes}</p>}
               </div>
             )}
+            <div className="verification-checklist">
+              <div>
+                <p className="eyebrow">PUBLISH CHECKLIST</p>
+                <strong>{completedChecks} of {checklist.length} fields ready</strong>
+              </div>
+              <span className="verification-progress">
+                <i style={{ width: `${(completedChecks / checklist.length) * 100}%` }} />
+              </span>
+              <ul>
+                {checklist.map((item) => (
+                  <li className={item.complete ? "complete" : ""} key={item.label}>
+                    {item.complete ? <Check size={13} /> : <CircleAlert size={13} />}
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+              <small>Only the source and at least one admission rule are required to publish. Complete every available field where the call provides it.</small>
+            </div>
           </aside>
           <div className="editor-fields">
             <h3>Programme</h3>

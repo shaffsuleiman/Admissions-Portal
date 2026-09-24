@@ -20,6 +20,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { ProfileReview } from "@/components/ProfileReview";
 import { ProgrammeEditor } from "@/components/ProgrammeEditor";
 import { ShortlistReport } from "@/components/ShortlistReport";
+import { hasEligibilityRules } from "@/lib/matching/engine";
 import {
   createApplicationFromMatch,
   deleteStudent,
@@ -71,6 +72,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   ListFilter,
+  ListChecks,
   LockKeyhole,
   LogOut,
   Mail,
@@ -2028,6 +2030,22 @@ function ProgrammeStatus({ programme }: { programme: Programme }) {
   );
 }
 
+function programmeReadiness(programme: Programme) {
+  const fields = [
+    Boolean(programme.source && programme.source !== "#"),
+    hasEligibilityRules(programme.rules),
+    Boolean(programme.academicYear),
+    programme.feeValue != null,
+    Boolean(programme.deadlineIso),
+    Boolean(programme.applicationUrl),
+    programme.evidence.length > 0,
+  ];
+  return {
+    complete: fields.filter(Boolean).length,
+    total: fields.length,
+  };
+}
+
 function ProgrammesView({
   programmes,
   universities,
@@ -2047,21 +2065,36 @@ function ProgrammesView({
   );
   const [levelFilter, setLevelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const visible = programmes.filter((programme) => {
-    const matchesQuery =
-      `${programme.programme} ${programme.university} ${programme.city} ${programme.degreeClass}`
-        .toLowerCase()
-        .includes(query.toLowerCase());
-    const level = programme.degreeLevel.toLowerCase();
-    const matchesLevel =
-      levelFilter === "all" ||
-      (levelFilter === "bachelor" && level.includes("bachelor")) ||
-      (levelFilter === "master" && level === "master") ||
-      (levelFilter === "single-cycle" && level.includes("single"));
-    const matchesStatus =
-      statusFilter === "all" || programme.status === statusFilter;
-    return matchesQuery && matchesLevel && matchesStatus;
-  });
+  const queueMode = statusFilter === "queue";
+  const visible = programmes
+    .filter((programme) => {
+      const matchesQuery =
+        `${programme.programme} ${programme.university} ${programme.city} ${programme.degreeClass}`
+          .toLowerCase()
+          .includes(query.toLowerCase());
+      const level = programme.degreeLevel.toLowerCase();
+      const matchesLevel =
+        levelFilter === "all" ||
+        (levelFilter === "bachelor" && level.includes("bachelor")) ||
+        (levelFilter === "master" && level === "master") ||
+        (levelFilter === "single-cycle" && level.includes("single"));
+      const matchesStatus = queueMode
+        ? programme.status !== "verified"
+        : statusFilter === "all" || programme.status === statusFilter;
+      return matchesQuery && matchesLevel && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (!queueMode) return 0;
+      const statusOrder: Record<string, number> = {
+        in_review: 0,
+        unverified: 1,
+        stale: 2,
+      };
+      const byStatus =
+        (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3);
+      if (byStatus) return byStatus;
+      return programmeReadiness(b).complete - programmeReadiness(a).complete;
+    });
   const visibleUniversities = universities.filter((university) =>
     `${university.name} ${university.region} ${university.institutionType}`
       .toLowerCase()
@@ -2076,6 +2109,7 @@ function ProgrammesView({
   const stale = programmes.filter((programme) =>
     ["stale", "unverified"].includes(programme.status),
   ).length;
+  const queueCount = programmes.length - verified;
   const catalogueTabs = (
     <div className="tab-bar" role="tablist" aria-label="Catalogue view">
       <button
@@ -2280,12 +2314,44 @@ function ProgrammesView({
           <Download size={16} /> Export database
         </button>
         {isVerifier && (
-          <button className="primary-button" onClick={() => onEdit("new")}>
-            <Plus size={17} /> Add programme
-          </button>
+          <>
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setCatalogue("programmes");
+                setStatusFilter("queue");
+                setQuery("");
+              }}
+            >
+              <ListChecks size={16} /> Review queue ({queueCount})
+            </button>
+            <button className="primary-button" onClick={() => onEdit("new")}>
+              <Plus size={17} /> Add programme
+            </button>
+          </>
         )}
       </PageTitle>
       {catalogueTabs}
+      {isVerifier && queueMode && (
+        <div className="review-queue-banner">
+          <div>
+            <ListChecks size={21} />
+            <span>
+              <strong>Programme verification queue</strong>
+              <small>
+                In-review records appear first, followed by the most complete catalogue records.
+              </small>
+            </span>
+          </div>
+          <button
+            className="primary-button"
+            disabled={!visible.length}
+            onClick={() => visible[0] && onEdit(visible[0])}
+          >
+            Review next programme <ArrowRight size={15} />
+          </button>
+        </div>
+      )}
       <div className="database-banner">
         <div className="database-icon">
           <ShieldCheck size={22} />
@@ -2353,6 +2419,7 @@ function ProgrammesView({
             aria-label="Filter programmes by verification status"
           >
             <option value="all">All data statuses</option>
+            {isVerifier && <option value="queue">Review queue</option>}
             <option value="verified">Verified</option>
             <option value="in_review">In review</option>
             <option value="unverified">Needs verification</option>
@@ -2391,6 +2458,17 @@ function ProgrammesView({
                     {programme.degreeLevel} · {programme.language} · A.Y.{" "}
                     {programme.academicYear}
                   </small>
+                  {isVerifier && (() => {
+                    const readiness = programmeReadiness(programme);
+                    return (
+                      <small className="review-readiness">
+                        <span>
+                          <i style={{ width: `${(readiness.complete / readiness.total) * 100}%` }} />
+                        </span>
+                        {readiness.complete}/{readiness.total} fields ready
+                      </small>
+                    );
+                  })()}
                 </span>
               </span>
               <span>{programme.intake}</span>

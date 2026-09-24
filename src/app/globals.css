@@ -4924,6 +4924,64 @@ a:focus-visible {
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
+.verification-checklist {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+}
+.verification-checklist > div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+.verification-checklist > div .eyebrow {
+  margin: 0;
+}
+.verification-checklist > div strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+.verification-progress,
+.review-readiness > span {
+  background: #e7ede9;
+  border-radius: 99px;
+  display: block;
+  height: 5px;
+  overflow: hidden;
+}
+.verification-progress i,
+.review-readiness > span i {
+  background: var(--green);
+  display: block;
+  height: 100%;
+}
+.verification-checklist ul {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.verification-checklist li {
+  align-items: center;
+  color: #ad6c32;
+  display: flex;
+  font-size: 10px;
+  gap: 5px;
+}
+.verification-checklist li.complete {
+  color: var(--green);
+}
+.verification-checklist > small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
 .editor-fields {
   display: flex;
   flex-direction: column;
@@ -4990,6 +5048,47 @@ a:focus-visible {
 }
 .verifier-row {
   cursor: default;
+}
+.review-queue-banner {
+  align-items: center;
+  background: #eef8f2;
+  border: 1px solid #cfe7d8;
+  border-radius: 12px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 13px 16px;
+}
+.review-queue-banner > div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+.review-queue-banner > div > svg {
+  color: var(--green);
+}
+.review-queue-banner strong,
+.review-queue-banner small {
+  display: block;
+}
+.review-queue-banner strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.review-queue-banner small {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+.review-readiness {
+  align-items: center;
+  color: #6f8879 !important;
+  display: flex !important;
+  gap: 6px;
+}
+.review-readiness > span {
+  flex: 0 0 72px;
 }
 .drawer-hint {
   background: #fff8ec;
@@ -5292,5 +5391,12 @@ body.report-open {
   .programme-table.verifier .table-head,
   .programme-table.verifier .table-row {
     grid-template-columns: 2fr 0.8fr 0.8fr 120px;
+  }
+  .review-queue-banner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .review-queue-banner .primary-button {
+    width: 100%;
   }
 }
