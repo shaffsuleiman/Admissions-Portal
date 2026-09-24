@@ -13,6 +13,7 @@ import bolognaPhoto from "../../public/images/campus/bologna.jpg";
 import milanPhoto from "../../public/images/campus/milan.jpg";
 import paduaPhoto from "../../public/images/campus/padua.jpg";
 import pisaPhoto from "../../public/images/campus/pisa.jpg";
+import romePhoto from "../../public/images/campus/rome.jpg";
 import turinPhoto from "../../public/images/campus/turin.jpg";
 import venicePhoto from "../../public/images/campus/venice.jpg";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
@@ -195,6 +196,11 @@ const campusPhotos: { match: RegExp; photo: StaticImageData; place: string }[] =
     },
     { match: /milan|milano/i, photo: milanPhoto, place: "Ca’ Granda, Milan" },
     { match: /pisa/i, photo: pisaPhoto, place: "Palazzo della Sapienza, Pisa" },
+    {
+      match: /sapienza/i,
+      photo: romePhoto,
+      place: "Sapienza University main campus, Rome",
+    },
     {
       match: /venice|venezia|foscari/i,
       photo: venicePhoto,
