@@ -637,6 +637,11 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
         String(asObject(row.programmes)?.verification_status),
       ),
     )
+    // Never label a legacy score as the new rank score. It will reappear after
+    // the counsellor runs matching with the current engine.
+    .filter(
+      (row) => numberOrNull(asObject(row.rules_snapshot)?.eligibility_score) != null,
+    )
     .map((row) => {
       const programme = asObject(row.programmes) ?? {};
       const snapshot = asObject(row.rules_snapshot) ?? {};
