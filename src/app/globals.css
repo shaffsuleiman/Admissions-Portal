@@ -2264,6 +2264,24 @@ a:focus-visible {
 .agenda-panel .deadline-row {
   padding: 10px 0;
 }
+.deadline-toggle {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--blue);
+  display: flex;
+  font-size: 9px;
+  font-weight: 800;
+  gap: 5px;
+  margin: -5px 0 3px 51px;
+  padding: 3px 0;
+}
+.deadline-toggle.complete {
+  color: var(--green);
+}
+.deadline-toggle:disabled {
+  opacity: 0.6;
+}
 .report-grid {
   display: grid;
   gap: 16px;
@@ -3240,6 +3258,12 @@ a:focus-visible {
   display: flex;
   justify-content: space-between;
   padding: 15px 26px;
+}
+.deadline-modal {
+  max-width: 560px;
+}
+.deadline-modal .wizard-body {
+  min-height: 0;
 }
 .toast {
   align-items: center;

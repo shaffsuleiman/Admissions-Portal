@@ -185,6 +185,13 @@ export type DeadlineItem = {
   university: string;
 };
 
+export type NewDeadlineInput = {
+  title: string;
+  type: "application" | "scholarship" | "pre_enrolment" | "document" | "visa" | "custom";
+  dueAt: string;
+  studentId: string | null;
+};
+
 export type WorkspaceData = {
   workspace: Workspace;
   currentUser: TeamMember;
@@ -979,6 +986,57 @@ export async function updateApplicationStage(
     .update(changes)
     .eq("id", applicationId);
   if (error) throw error;
+}
+
+export async function createDeadline(
+  workspaceId: string,
+  input: NewDeadlineInput,
+) {
+  const supabase = createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user)
+    throw new Error("Your session expired. Please sign in again.");
+  if (!input.title.trim() || !input.dueAt)
+    throw new Error("Add a deadline title and date.");
+  const { error } = await supabase.from("deadlines").insert({
+    workspace_id: workspaceId,
+    student_id: input.studentId,
+    deadline_type: input.type,
+    title: input.title.trim(),
+    due_at: new Date(`${input.dueAt}T12:00:00Z`).toISOString(),
+  });
+  if (error) throw error;
+  await supabase.from("activity_logs").insert({
+    workspace_id: workspaceId,
+    actor_id: authData.user.id,
+    action: "deadline.created",
+    entity_type: "deadline",
+    metadata: { title: input.title.trim(), due_at: input.dueAt },
+  });
+}
+
+export async function setDeadlineCompleted(
+  workspaceId: string,
+  deadlineId: string,
+  completed: boolean,
+) {
+  const supabase = createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user)
+    throw new Error("Your session expired. Please sign in again.");
+  const { error } = await supabase
+    .from("deadlines")
+    .update({ completed_at: completed ? new Date().toISOString() : null })
+    .eq("id", deadlineId)
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+  await supabase.from("activity_logs").insert({
+    workspace_id: workspaceId,
+    actor_id: authData.user.id,
+    action: completed ? "deadline.completed" : "deadline.reopened",
+    entity_type: "deadline",
+    entity_id: deadlineId,
+  });
 }
 
 export async function createApplicationFromMatch(

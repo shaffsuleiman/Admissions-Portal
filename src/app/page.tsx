@@ -24,6 +24,7 @@ import { hasEligibilityRules } from "@/lib/matching/engine";
 import {
   createApplicationFromMatch,
   aiReviewProgramme,
+  createDeadline,
   deleteStudent,
   messageOf,
   createStudent,
@@ -34,11 +35,13 @@ import {
   saveConfirmedProfile,
   saveProgramme,
   saveUniversityConversion,
+  setDeadlineCompleted,
   updateApplicationStage,
   updateWorkspaceProfile,
   type Application,
   type DeadlineItem,
   type MatchResult,
+  type NewDeadlineInput,
   type NewStudentInput,
   type Programme,
   type Student,
@@ -304,7 +307,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     const { error } = await createSupabaseClient().auth.resetPasswordForEmail(
       email,
       {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/?recovery=1")}`,
       },
     );
     setMessage(
@@ -554,6 +557,73 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void; onCancel: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (password.length < 8) return setError("Use at least 8 characters.");
+    if (password !== confirm) return setError("The passwords do not match.");
+    setLoading(true);
+    const { error: updateError } = await createSupabaseClient().auth.updateUser({ password });
+    setLoading(false);
+    if (updateError) return setError(authErrorMessage(updateError));
+    window.history.replaceState({}, "", "/");
+    onComplete();
+  };
+
+  return (
+    <main className="auth-page">
+      <section className="auth-story">
+        <Image src={venicePhoto} alt="Ca’ Foscari University on the Grand Canal, Venice" className="auth-story-photo" fill preload sizes="(max-width: 820px) 100vw, 55vw" />
+        <div className="auth-story-veil" />
+        <Brand light />
+        <div className="story-copy">
+          <h1>Choose a new <em>secure password.</em></h1>
+          <p>Your recovery link has been verified. Set the password you’ll use for your SHAFFMINNA workspace.</p>
+        </div>
+      </section>
+      <section className="auth-panel">
+        <div className="mobile-brand"><Brand /></div>
+        <div className="auth-box">
+          <p className="eyebrow">ACCOUNT RECOVERY</p>
+          <h2>Set a new password</h2>
+          <p className="muted">Use at least eight characters and avoid reusing an old password.</p>
+          <form onSubmit={submit}>
+            <label>
+              New password
+              <div className="input-wrap">
+                <LockKeyhole size={17} />
+                <input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={8} required />
+                <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </label>
+            <label>
+              Confirm password
+              <div className="input-wrap">
+                <LockKeyhole size={17} />
+                <input type={showPassword ? "text" : "password"} value={confirm} onChange={(event) => setConfirm(event.target.value)} autoComplete="new-password" minLength={8} required />
+              </div>
+            </label>
+            {error && <p className="auth-message error" role="alert">{error}</p>}
+            <button className="login-button" type="submit" disabled={loading}>
+              {loading ? <span className="spinner" /> : <>Save new password <ArrowRight size={17} /></>}
+            </button>
+          </form>
+          <p className="auth-switch"><button onClick={onCancel}>Cancel and sign out</button></p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function AppShell({ onLogout }: { onLogout: () => void }) {
   const [view, setView] = useState<View>("Overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -568,6 +638,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   const [dataError, setDataError] = useState("");
   const [loadingData, setLoadingData] = useState(true);
   const [reviewStudentId, setReviewStudentId] = useState("");
+  const [autoReadStudentId, setAutoReadStudentId] = useState("");
   const [reportStudentId, setReportStudentId] = useState("");
   const [editingProgramme, setEditingProgramme] = useState<
     Programme | "new" | null
@@ -910,7 +981,21 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               }}
             />
           )}
-          {view === "Calendar" && <CalendarView deadlines={deadlines} />}
+          {view === "Calendar" && (
+            <CalendarView
+              deadlines={deadlines}
+              students={students}
+              onCreate={async (input) => {
+                await createDeadline(workspace.id, input);
+                await refresh();
+              }}
+              onToggle={async (deadline, completed) => {
+                await setDeadlineCompleted(workspace.id, deadline.id, completed);
+                await refresh();
+              }}
+              onNotify={notify}
+            />
+          )}
           {view === "Reports" && (
             <ReportsView
               students={students}
@@ -947,8 +1032,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             await refresh();
             setNewStudent(false);
             notify(`${input.firstName} ${input.lastName}’s profile was saved`);
-            // Straight into review, where AI reads the uploads and the counsellor confirms.
-            if (input.files.length) setReviewStudentId(studentId);
+            // Straight into review and automatically read every uploaded document.
+            if (input.files.length) {
+              setAutoReadStudentId(studentId);
+              setReviewStudentId(studentId);
+            }
           }}
         />
       )}
@@ -980,7 +1068,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
         <ProfileReview
           key={`review-${reviewStudent.id}`}
           student={reviewStudent}
-          onClose={() => setReviewStudentId("")}
+          autoRead={autoReadStudentId === reviewStudent.id}
+          onClose={() => {
+            setReviewStudentId("");
+            setAutoReadStudentId("");
+          }}
           onRead={async (documentId) => {
             const extraction = await extractDocument(documentId);
             void refresh();
@@ -988,11 +1080,17 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
           }}
           onSave={async (input) => {
             await saveConfirmedProfile(workspace.id, reviewStudent.id, input);
+            let resultMessage = `${reviewStudent.name.split(" ")[0]}’s profile confirmed.`;
+            try {
+              const count = await runStudentMatch(workspace.id, reviewStudent.id);
+              resultMessage += ` ${count} programmes matched.`;
+            } catch (caught) {
+              resultMessage += ` Matching is waiting: ${messageOf(caught) ?? "no reviewed programmes are available yet"}`;
+            }
             await refresh();
             setReviewStudentId("");
-            notify(
-              `${reviewStudent.name.split(" ")[0]}’s profile confirmed. Run a match next.`,
-            );
+            setAutoReadStudentId("");
+            notify(resultMessage);
           }}
         />
       )}
@@ -2766,10 +2864,100 @@ function ApplicationsView({
   );
 }
 
-function CalendarView({ deadlines }: { deadlines: DeadlineItem[] }) {
+function NewDeadlineModal({
+  students,
+  onClose,
+  onSave,
+}: {
+  students: Student[];
+  onClose: () => void;
+  onSave: (input: NewDeadlineInput) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<NewDeadlineInput["type"]>("custom");
+  const [dueAt, setDueAt] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEscape(onClose);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await onSave({ title, type, dueAt, studentId: studentId || null });
+      onClose();
+    } catch (caught) {
+      setError(messageOf(caught) ?? "Could not create the deadline.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <form className="wizard deadline-modal" role="dialog" aria-modal="true" aria-labelledby="deadline-modal-title" onSubmit={save}>
+        <header>
+          <div>
+            <p className="eyebrow">DEADLINE CONTROL</p>
+            <h2 id="deadline-modal-title">Add a deadline</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close deadline form"><X size={20} /></button>
+        </header>
+        <div className="wizard-body">
+          <div className="field-grid">
+            <label className="wide">Title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Universitaly pre-enrolment" required autoFocus /></label>
+            <label>
+              Deadline type
+              <select value={type} onChange={(event) => setType(event.target.value as NewDeadlineInput["type"])}>
+                <option value="application">Application</option>
+                <option value="scholarship">Scholarship</option>
+                <option value="pre_enrolment">Pre-enrolment</option>
+                <option value="document">Document</option>
+                <option value="visa">Visa</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>Due date<input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} required /></label>
+            <label className="wide">
+              Student (optional)
+              <select value={studentId} onChange={(event) => setStudentId(event.target.value)}>
+                <option value="">Workspace-wide deadline</option>
+                {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+              </select>
+            </label>
+          </div>
+          {error && <p className="auth-message error" role="alert">{error}</p>}
+        </div>
+        <footer>
+          <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+          <button className="primary-button" type="submit" disabled={saving || !title.trim() || !dueAt}>
+            {saving ? <span className="spinner" /> : <CalendarDays size={16} />} {saving ? "Saving…" : "Add deadline"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function CalendarView({
+  deadlines,
+  students,
+  onCreate,
+  onToggle,
+  onNotify,
+}: {
+  deadlines: DeadlineItem[];
+  students: Student[];
+  onCreate: (input: NewDeadlineInput) => Promise<void>;
+  onToggle: (deadline: DeadlineItem, completed: boolean) => Promise<void>;
+  onNotify: (message: string) => void;
+}) {
   const [month, setMonth] = useState(
     new Date(TODAY.getFullYear(), TODAY.getMonth(), 1),
   );
+  const [adding, setAdding] = useState(false);
+  const [updating, setUpdating] = useState("");
   const calendarEvents = useMemo(
     () =>
       deadlines.reduce<
@@ -2787,7 +2975,6 @@ function CalendarView({ deadlines }: { deadlines: DeadlineItem[] }) {
   );
   const agenda = deadlines.filter(
     (deadline) =>
-      !deadline.completedAt &&
       daysUntil(deadline.dueAt) >= 0 &&
       daysUntil(deadline.dueAt) <= 30,
   );
@@ -2815,6 +3002,9 @@ function CalendarView({ deadlines }: { deadlines: DeadlineItem[] }) {
         title="Calendar"
         text="Application, pre-enrolment, scholarship, and visa milestones in one place."
       >
+        <button className="primary-button" onClick={() => setAdding(true)}>
+          <Plus size={16} /> Add deadline
+        </button>
         <button
           className="secondary-button"
           onClick={() =>
@@ -2899,6 +3089,24 @@ function CalendarView({ deadlines }: { deadlines: DeadlineItem[] }) {
                   days={days === 0 ? "Today" : `${days} days`}
                   urgent={days <= 7}
                 />
+                <button
+                  className={`deadline-toggle ${deadline.completedAt ? "complete" : ""}`}
+                  disabled={updating === deadline.id}
+                  onClick={async () => {
+                    setUpdating(deadline.id);
+                    try {
+                      await onToggle(deadline, !deadline.completedAt);
+                      onNotify(deadline.completedAt ? "Deadline reopened" : "Deadline completed");
+                    } catch (caught) {
+                      onNotify(messageOf(caught) ?? "Could not update deadline");
+                    } finally {
+                      setUpdating("");
+                    }
+                  }}
+                >
+                  {updating === deadline.id ? <span className="spinner dark" /> : <CheckCircle2 size={14} />}
+                  {deadline.completedAt ? "Reopen" : "Mark complete"}
+                </button>
               </div>
             );
           })}
@@ -2911,6 +3119,16 @@ function CalendarView({ deadlines }: { deadlines: DeadlineItem[] }) {
           )}
         </aside>
       </div>
+      {adding && (
+        <NewDeadlineModal
+          students={students}
+          onClose={() => setAdding(false)}
+          onSave={async (input) => {
+            await onCreate(input);
+            onNotify("Deadline added");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -4323,6 +4541,9 @@ export default function Home() {
   const configured = isSupabaseConfigured();
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(configured);
+  const [recoveringPassword, setRecoveringPassword] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovery") === "1",
+  );
 
   useEffect(() => {
     if (!configured) return;
@@ -4348,6 +4569,17 @@ export default function Home() {
         <Brand />
         <span className="spinner dark" />
       </main>
+    );
+  if (authenticated && recoveringPassword)
+    return (
+      <ResetPasswordScreen
+        onComplete={() => setRecoveringPassword(false)}
+        onCancel={() => {
+          window.history.replaceState({}, "", "/");
+          setRecoveringPassword(false);
+          logout();
+        }}
+      />
     );
   return authenticated ? (
     <AppShell onLogout={logout} />

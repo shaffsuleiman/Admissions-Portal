@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileText, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import type { TranscriptExtraction } from "@/lib/ai/schemas";
 import { DEFAULT_CONVERSION, SUBJECT_AREAS, toItalian110 } from "@/lib/matching/engine";
@@ -22,11 +22,13 @@ export function ProfileReview({
   onClose,
   onRead,
   onSave,
+  autoRead = false,
 }: {
   student: Student;
   onClose: () => void;
   onRead: (documentId: string) => Promise<TranscriptExtraction>;
   onSave: (input: ConfirmedProfileInput) => Promise<void>;
+  autoRead?: boolean;
 }) {
   const academic = student.academic;
   const [degreeTitle, setDegreeTitle] = useState(academic.degreeTitle);
@@ -54,6 +56,7 @@ export function ProfileReview({
   const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const autoReadStarted = useRef(false);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -75,7 +78,7 @@ export function ProfileReview({
     }
   };
 
-  const applyReadings = (readings: TranscriptExtraction[]) => {
+  const applyReadings = useCallback((readings: TranscriptExtraction[]) => {
     const filled = new Set<string>();
     const pick = <K extends keyof TranscriptExtraction>(key: K) => readings.map((reading) => reading[key]).find((value) => value != null && value !== "");
     const set = (key: string, value: unknown, setter: (value: string) => void) => {
@@ -120,12 +123,12 @@ export function ProfileReview({
       filled.add("courses");
     }
     setAiFilled(filled);
-  };
+  }, []);
 
   // Applies every AI reading to the form. The counsellor still edits and confirms.
   const applyAi = () => applyReadings(Object.values(extractions));
 
-  const readAll = async () => {
+  const readAll = useCallback(async () => {
     const documents = student.documents.filter(readable);
     if (!documents.length) return;
     setBulkMessage("");
@@ -164,7 +167,13 @@ export function ProfileReview({
     } finally {
       setReading("");
     }
-  };
+  }, [applyReadings, extractions, onRead, student.documents]);
+
+  useEffect(() => {
+    if (!autoRead || autoReadStarted.current || !student.documents.some(readable)) return;
+    autoReadStarted.current = true;
+    void readAll();
+  }, [autoRead, readAll, student.documents]);
 
   const totals = useMemo(() => {
     const byArea = new Map<string, number>();
