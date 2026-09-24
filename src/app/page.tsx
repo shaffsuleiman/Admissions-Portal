@@ -177,7 +177,7 @@ function Brand({ light = false }: { light?: boolean }) {
         <span />
       </div>
       <div>
-        <strong>SHAFFMINNA</strong>
+        <strong>Eligify</strong>
         <small>ADMISSIONS OS</small>
       </div>
     </div>
@@ -529,7 +529,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               </>
             ) : (
               <>
-                New to SHAFFMINNA?{" "}
+                New to Eligify?{" "}
                 <button onClick={() => switchMode("signup")}>
                   Create a workspace
                 </button>
@@ -539,7 +539,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           {configured ? (
             <p className="demo-notice connected">
               <ShieldCheck size={13} /> Secure sign-in · connected to your
-              SHAFFMINNA workspace
+              Eligify workspace
             </p>
           ) : (
             <p className="demo-notice">
@@ -585,7 +585,7 @@ function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void;
         <Brand light />
         <div className="story-copy">
           <h1>Choose a new <em>secure password.</em></h1>
-          <p>Your recovery link has been verified. Set the password you’ll use for your SHAFFMINNA workspace.</p>
+          <p>Your recovery link has been verified. Set the password you’ll use for your Eligify workspace.</p>
         </div>
       </section>
       <section className="auth-panel">
@@ -4486,7 +4486,7 @@ function NewStudentWizard({
               </div>
               <h3>Everything looks ready.</h3>
               <p>
-                SHAFFMINNA will create {firstName}’s profile and prepare{" "}
+                Eligify will create {firstName}’s profile and prepare{" "}
                 {files.length} uploaded{" "}
                 {files.length === 1 ? "document" : "documents"} for your review.
               </p>

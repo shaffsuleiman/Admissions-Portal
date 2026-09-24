@@ -6,7 +6,7 @@ const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const display = Fraunces({ subsets: ["latin"], variable: "--font-display", axes: ["SOFT", "opsz"] });
 
 export const metadata: Metadata = {
-  title: "SHAFFMINNA · Admissions OS",
+  title: "Eligify · Admissions OS",
   description: "Verified admissions matching and application management for education consultancies.",
 };
 

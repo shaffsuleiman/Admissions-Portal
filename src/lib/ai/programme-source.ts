@@ -43,7 +43,7 @@ export async function draftProgrammeFromSource(source: { sourceUrl?: string; tex
   } else if (source.sourceUrl) {
     if (!isPublicHttpUrl(source.sourceUrl)) throw new Error("Enter a public http(s) link to the admissions call.");
     const response = await fetch(source.sourceUrl, {
-      headers: { "User-Agent": "SHAFFMINNAAdmissionsVerifier/1.0" },
+      headers: { "User-Agent": "EligifyAdmissionsVerifier/1.0" },
       signal: AbortSignal.timeout(20_000),
       redirect: "follow",
     }).catch(() => null);
