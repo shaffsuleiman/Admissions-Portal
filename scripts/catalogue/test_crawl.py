@@ -1,7 +1,11 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from crawl import (
     calculate_diff,
+    load_supplement,
     parse_bologna_second,
     parse_padua_combined,
     parse_pisa,
@@ -88,6 +92,30 @@ class CatalogueParserTests(unittest.TestCase):
         result = parse_pisa(html, "https://example.edu/catalogue")
         self.assertEqual(result[0].official_programme_code, "WCY-LM")
         self.assertEqual(result[-1].degree_level, "Bachelor")
+
+    def test_reviewed_supplement_is_loaded_and_validated(self):
+        row = {
+            "university_slug": "trento",
+            "university_name": "University of Trento",
+            "programme_name": "Data Science",
+            "city": "Trento",
+            "degree_level": "Master",
+            "teaching_language": "English",
+            "official_programme_code": None,
+            "degree_class": None,
+            "duration_years": 2.0,
+            "source_url": "https://example.edu/data-science",
+            "catalogue_source_url": "https://example.edu/catalogue",
+            "academic_year": "2026/27",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "supplement.json"
+            path.write_text(json.dumps({"programmes": [row]}), encoding="utf-8")
+            result = load_supplement(path)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].university_slug, "trento")
+        self.assertEqual(result[0].programme_name, "Data Science")
 
 
 if __name__ == "__main__":
