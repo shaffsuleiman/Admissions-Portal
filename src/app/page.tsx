@@ -1,7 +1,9 @@
 "use client";
 
 import {
-  FormEvent,
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -650,33 +652,42 @@ function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void;
 const quickStartSteps = [
   {
     icon: UserPlus,
-    eyebrow: "STEP 1 OF 4",
-    title: "Add your first student",
-    text: "Create a profile with their target intake and budget. You can upload all available documents in the same flow.",
-    detail: "Students → Add student",
+    target: '[data-tour="students-nav"]',
+    title: "Start with a student profile",
+    text: "Keep academic history, target intake, budget and every supporting document together in one reviewable profile.",
+    detail: "Open Students, then choose Add student",
+  },
+  {
+    icon: BookOpen,
+    target: '[data-tour="programmes-nav"]',
+    title: "Work from trusted programme data",
+    text: "Browse the Italian catalogue, inspect source freshness and review admission rules before they become eligible for matching.",
+    detail: "Only evidence-backed rules enter the matcher",
   },
   {
     icon: Sparkles,
-    eyebrow: "STEP 2 OF 4",
-    title: "Let AI read the documents",
-    text: "Eligify reads the uploaded files together and drafts CGPA, education length, English results and subject credits.",
-    detail: "Use Read all with AI, then check the extracted facts",
-  },
-  {
-    icon: CheckCircle2,
-    eyebrow: "STEP 3 OF 4",
-    title: "Confirm once, match automatically",
-    text: "Confirming the academic profile runs the deterministic matcher against every evidence-backed programme rule.",
-    detail: "Green, amber and red checks explain every result",
+    target: '[data-tour="matches-nav"]',
+    title: "See explainable matches",
+    text: "Every result shows the academic checks, missing evidence and fit signals behind the recommendation.",
+    detail: "Green, amber and red checks make decisions auditable",
   },
   {
     icon: FileCheck2,
-    eyebrow: "STEP 4 OF 4",
-    title: "Turn a match into an application",
-    text: "Shortlist a suitable programme, start the application and track university, document and visa deadlines.",
-    detail: "Matches → Start application → Calendar",
+    target: '[data-tour="applications-nav"]',
+    title: "Move from shortlist to enrolment",
+    text: "Turn a suitable match into an application and keep university, document, pre-enrolment and visa stages visible.",
+    detail: "Applications and Calendar keep the whole team aligned",
   },
 ] as const;
+
+type TourRect = {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
+type TourPlacement = "above" | "below" | "left" | "right";
 
 function QuickStartTutorial({
   onClose,
@@ -686,64 +697,206 @@ function QuickStartTutorial({
   onStart: () => Promise<void>;
 }) {
   const [step, setStep] = useState(0);
+  const [targetRect, setTargetRect] = useState<TourRect | null>(null);
+  const [cardPosition, setCardPosition] = useState({ left: 24, top: 24 });
+  const [placement, setPlacement] = useState<TourPlacement>("right");
+  const [arrowOffset, setArrowOffset] = useState(38);
+  const cardRef = useRef<HTMLElement>(null);
+  const nextButtonRef = useRef<HTMLButtonElement>(null);
   const current = quickStartSteps[step];
   const Icon = current.icon;
   const last = step === quickStartSteps.length - 1;
   useEscape(() => void onClose());
 
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    nextButtonRef.current?.focus();
+    return () => previouslyFocused?.focus();
+  }, []);
+
+  useEffect(() => {
+    const target = document.querySelector<HTMLElement>(current.target);
+    if (!target) {
+      return;
+    }
+
+    const updatePosition = () => {
+      const bounds = target.getBoundingClientRect();
+      const padding = 8;
+      const rect = {
+        height: bounds.height + padding * 2,
+        left: Math.max(8, bounds.left - padding),
+        top: Math.max(8, bounds.top - padding),
+        width: bounds.width + padding * 2,
+      };
+      setTargetRect(rect);
+
+      const viewportPadding = 16;
+      const gap = 20;
+      const cardWidth = Math.min(390, window.innerWidth - viewportPadding * 2);
+      const cardHeight = cardRef.current?.offsetHeight ?? 340;
+      const rightSpace = window.innerWidth - (rect.left + rect.width);
+      const leftSpace = rect.left;
+      const belowSpace = window.innerHeight - (rect.top + rect.height);
+
+      let nextPlacement: TourPlacement;
+      let left: number;
+      let top: number;
+      if (rightSpace >= cardWidth + gap) {
+        nextPlacement = "right";
+        left = rect.left + rect.width + gap;
+        top = rect.top + rect.height / 2 - cardHeight / 2;
+      } else if (leftSpace >= cardWidth + gap) {
+        nextPlacement = "left";
+        left = rect.left - cardWidth - gap;
+        top = rect.top + rect.height / 2 - cardHeight / 2;
+      } else if (belowSpace >= cardHeight + gap) {
+        nextPlacement = "below";
+        left = rect.left + rect.width / 2 - cardWidth / 2;
+        top = rect.top + rect.height + gap;
+      } else {
+        nextPlacement = "above";
+        left = rect.left + rect.width / 2 - cardWidth / 2;
+        top = rect.top - cardHeight - gap;
+      }
+
+      const finalLeft = Math.min(
+        Math.max(viewportPadding, left),
+        Math.max(viewportPadding, window.innerWidth - cardWidth - viewportPadding),
+      );
+      const finalTop = Math.min(
+        Math.max(viewportPadding, top),
+        Math.max(viewportPadding, window.innerHeight - cardHeight - viewportPadding),
+      );
+      const verticalArrow = nextPlacement === "left" || nextPlacement === "right";
+      const desiredArrowOffset = verticalArrow
+        ? rect.top + rect.height / 2 - finalTop - 9
+        : rect.left + rect.width / 2 - finalLeft - 9;
+      const arrowLimit = Math.max(
+        24,
+        (verticalArrow ? cardHeight : cardWidth) - 42,
+      );
+
+      setPlacement(nextPlacement);
+      setCardPosition({
+        left: finalLeft,
+        top: finalTop,
+      });
+      setArrowOffset(Math.min(Math.max(24, desiredArrowOffset), arrowLimit));
+    };
+
+    updatePosition();
+    const settledTimer = window.setTimeout(updatePosition, 280);
+    const resizeObserver = new ResizeObserver(updatePosition);
+    resizeObserver.observe(target);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.clearTimeout(settledTimer);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [current.target, step]);
+
+  const onDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === "ArrowRight" && !last) setStep(step + 1);
+    if (event.key === "ArrowLeft" && step > 0) setStep(step - 1);
+    if (event.key !== "Tab" || !cardRef.current) return;
+    const focusable = Array.from(
+      cardRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const final = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      final.focus();
+    } else if (!event.shiftKey && document.activeElement === final) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const spotlightStyle = targetRect
+    ? ({
+        "--tour-height": `${targetRect.height}px`,
+        "--tour-left": `${targetRect.left}px`,
+        "--tour-top": `${targetRect.top}px`,
+        "--tour-width": `${targetRect.width}px`,
+      } as CSSProperties)
+    : undefined;
+
   return (
-    <div className="modal-backdrop onboarding-backdrop" role="presentation">
+    <div className="tour-layer">
+      <div className="tour-click-shield" aria-hidden="true" />
+      <div
+        className={`tour-spotlight ${targetRect ? "ready" : ""}`}
+        style={spotlightStyle}
+        aria-hidden="true"
+      />
       <section
-        className="onboarding-card"
+        ref={cardRef}
+        className="tour-card"
+        data-placement={placement}
+        style={
+          {
+            "--tour-arrow-offset": `${arrowOffset}px`,
+            left: cardPosition.left,
+            top: cardPosition.top,
+          } as CSSProperties
+        }
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-start-title"
+        aria-describedby="quick-start-description"
+        onKeyDown={onDialogKeyDown}
       >
-        <button
-          className="onboarding-close"
-          onClick={() => void onClose()}
-          aria-label="Skip quick start"
-        >
-          <X size={18} />
-        </button>
-        <div className="onboarding-visual">
-          <span className="onboarding-icon"><Icon size={32} /></span>
-          <div className="onboarding-orbit orbit-one" />
-          <div className="onboarding-orbit orbit-two" />
-        </div>
-        <div className="onboarding-copy">
-          <p className="eyebrow">{current.eyebrow}</p>
-          <h2 id="quick-start-title">{current.title}</h2>
-          <p>{current.text}</p>
-          <div className="onboarding-tip">
-            <Zap size={15} /> <span>{current.detail}</span>
-          </div>
-        </div>
-        <footer>
-          <div className="onboarding-dots" aria-label={`Step ${step + 1} of ${quickStartSteps.length}`}>
-            {quickStartSteps.map((item, index) => (
-              <button
-                key={item.title}
-                className={index === step ? "active" : ""}
-                onClick={() => setStep(index)}
-                aria-label={`Go to step ${index + 1}`}
-              />
-            ))}
-          </div>
-          <div className="onboarding-actions">
-            {step > 0 && (
-              <button className="secondary-button" onClick={() => setStep(step - 1)}>
-                Back
-              </button>
-            )}
-            <button
-              className="primary-button"
-              onClick={() => last ? void onStart() : setStep(step + 1)}
-            >
-              {last ? "Add first student" : "Next"} <ArrowRight size={15} />
+        <div className="tour-card-body">
+          <div className="tour-card-heading">
+            <span className="tour-icon" aria-hidden="true"><Icon size={18} /></span>
+            <span>QUICK START</span>
+            <button onClick={() => void onClose()} aria-label="Close quick-start tour">
+              <X size={17} />
             </button>
           </div>
-        </footer>
+          <div className="tour-copy">
+            <h2 id="quick-start-title">{current.title}</h2>
+            <p id="quick-start-description">{current.text}</p>
+            <div className="tour-tip">
+              <Zap size={15} /> <span>{current.detail}</span>
+            </div>
+          </div>
+          <div className="tour-progress" aria-hidden="true">
+            <span style={{ width: `${((step + 1) / quickStartSteps.length) * 100}%` }} />
+          </div>
+          <footer className="tour-footer">
+            <div className="tour-navigation">
+              <button
+                className="secondary-button"
+                disabled={step === 0}
+                onClick={() => setStep(step - 1)}
+              >
+                Previous
+              </button>
+              <span role="status" aria-live="polite">
+                {step + 1} of {quickStartSteps.length}
+              </span>
+              <button
+                ref={nextButtonRef}
+                className="primary-button"
+                onClick={() => last ? void onStart() : setStep(step + 1)}
+              >
+                {last ? "Add student" : "Next"} <ArrowRight size={15} />
+              </button>
+            </div>
+            <button className="tour-skip" onClick={() => void onClose()}>
+              Skip tour
+            </button>
+          </footer>
+        </div>
       </section>
     </div>
   );
@@ -775,6 +928,13 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   const tutorialPrompted = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const searchInput = useRef<HTMLInputElement>(null);
+
+  const openTutorial = useCallback(() => {
+    setTutorialOpen(true);
+    if (window.matchMedia("(max-width: 820px)").matches) {
+      setSidebarOpen(true);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setDataError("");
@@ -818,7 +978,13 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     if (data && !data.onboardingComplete && !tutorialPrompted.current) {
       tutorialPrompted.current = true;
-      setTutorialOpen(true);
+      const frame = window.requestAnimationFrame(() => {
+        setTutorialOpen(true);
+        if (window.matchMedia("(max-width: 820px)").matches) {
+          setSidebarOpen(true);
+        }
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
   }, [data]);
 
@@ -852,10 +1018,19 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
         event.preventDefault();
         searchInput.current?.focus();
       }
+      const target = event.target as HTMLElement | null;
+      const enteringText =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+      if (event.key === "?" && !enteringText && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        openTutorial();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [openTutorial]);
 
   useEffect(() => {
     const workspaceId = data?.workspace.id;
@@ -989,6 +1164,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
                 <button
                   className={view === label ? "active" : ""}
                   aria-current={view === label ? "page" : undefined}
+                  data-tour={`${viewSlugs[label]}-nav`}
                   key={label}
                   onClick={() =>
                     label === "Settings"
@@ -1079,11 +1255,17 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               <i /> {realtimeStatus === "live" ? "Auto sync" : realtimeStatus === "offline" ? "Offline" : "Syncing"}
             </span>
             <button
-              className="icon-button"
+              className="help-button"
               aria-label="Open quick-start tutorial"
-              onClick={() => setTutorialOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={tutorialOpen}
+              aria-keyshortcuts="?"
+              data-tour="help-button"
+              onClick={openTutorial}
             >
               <CircleHelp size={18} />
+              <span>Help &amp; tour</span>
+              <kbd>?</kbd>
             </button>
             <button
               className="icon-button notification"
@@ -1238,6 +1420,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
         <QuickStartTutorial
           onClose={async () => {
             setTutorialOpen(false);
+            setSidebarOpen(false);
             if (!data.onboardingComplete) {
               try {
                 await completeOnboarding();

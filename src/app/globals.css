@@ -897,6 +897,47 @@ a:focus-visible {
 .icon-button:hover {
   background: #f8f5f6;
 }
+.help-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfcfd5;
+  border-radius: 10px;
+  color: #593d48;
+  cursor: pointer;
+  display: flex;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 9px 0 11px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.help-button:hover {
+  border-color: #c990a5;
+  box-shadow: 0 7px 18px #5a253b14;
+  transform: translateY(-1px);
+}
+.help-button:focus-visible {
+  outline: 3px solid #d890aa5c;
+  outline-offset: 2px;
+}
+.help-button svg {
+  color: var(--blue);
+  flex-shrink: 0;
+}
+.help-button kbd {
+  align-items: center;
+  background: #f6edf1;
+  border: 1px solid #eadce1;
+  border-radius: 5px;
+  color: #7b5d68;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 10px;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
 .notification i {
   background: #ef7655;
   border: 2px solid white;
@@ -3037,92 +3078,133 @@ a:focus-visible {
   justify-content: center;
   padding: 20px;
 }
-.onboarding-backdrop {
-  backdrop-filter: blur(8px);
-  background: #30141e70;
+.tour-layer {
+  inset: 0;
+  position: fixed;
   z-index: 90;
 }
-.onboarding-card {
+.tour-click-shield {
+  inset: 0;
+  position: fixed;
+  z-index: 90;
+}
+.tour-spotlight {
+  background: transparent;
+  border: 2px solid #e4a4bb;
+  border-radius: 13px;
+  box-shadow: 0 0 0 9999px #281a1f99, 0 0 0 5px #ffffffc2;
+  height: var(--tour-height, 0);
+  left: var(--tour-left, 50%);
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  top: var(--tour-top, 50%);
+  transition: height 0.2s ease, left 0.2s ease, opacity 0.15s ease, top 0.2s ease, width 0.2s ease;
+  width: var(--tour-width, 0);
+  z-index: 91;
+}
+.tour-spotlight.ready {
+  opacity: 1;
+}
+.tour-card {
   background: white;
   border: 1px solid #eadde2;
-  border-radius: 24px;
-  box-shadow: 0 34px 100px #30141e52;
-  max-width: 680px;
-  overflow: hidden;
-  position: relative;
-  width: 100%;
+  border-radius: 18px;
+  box-shadow: 0 28px 80px #160b0f59;
+  position: fixed;
+  width: min(390px, calc(100vw - 32px));
+  z-index: 92;
 }
-.onboarding-close {
+.tour-card-body {
+  border-radius: inherit;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 22px;
+}
+.tour-card::before {
+  background: white;
+  border-left: 1px solid #eadde2;
+  border-top: 1px solid #eadde2;
+  content: "";
+  height: 18px;
+  position: absolute;
+  transform: rotate(45deg);
+  width: 18px;
+}
+.tour-card[data-placement="right"]::before {
+  left: -10px;
+  top: var(--tour-arrow-offset, 38px);
+}
+.tour-card[data-placement="left"]::before {
+  right: -10px;
+  top: var(--tour-arrow-offset, 38px);
+  transform: rotate(225deg);
+}
+.tour-card[data-placement="below"]::before {
+  left: var(--tour-arrow-offset, 38px);
+  top: -10px;
+}
+.tour-card[data-placement="above"]::before {
+  bottom: -10px;
+  left: var(--tour-arrow-offset, 38px);
+  transform: rotate(225deg);
+}
+.tour-card-heading {
   align-items: center;
-  background: #ffffffc7;
-  border: 1px solid #eadde2;
-  border-radius: 50%;
-  color: var(--muted);
+  color: #947b84;
+  display: flex;
+  font-size: 9px;
+  font-weight: 900;
+  gap: 8px;
+  letter-spacing: 1.1px;
+}
+.tour-card-heading > span:nth-child(2) {
+  flex: 1;
+}
+.tour-card-heading button {
+  align-items: center;
+  background: #faf6f7;
+  border: 1px solid #eee4e7;
+  border-radius: 8px;
+  color: #806a72;
+  cursor: pointer;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+.tour-card-heading button:focus-visible,
+.tour-card button:focus-visible {
+  outline: 3px solid #d890aa5c;
+  outline-offset: 2px;
+}
+.tour-icon {
+  align-items: center;
+  background: #fae9ef;
+  border-radius: 8px;
+  color: var(--blue);
   display: flex;
   height: 34px;
   justify-content: center;
-  position: absolute;
-  right: 18px;
-  top: 18px;
   width: 34px;
-  z-index: 2;
 }
-.onboarding-visual {
-  align-items: center;
-  background:
-    radial-gradient(circle at 26% 35%, #ffffffb8 0 5%, transparent 6%),
-    linear-gradient(135deg, #f8e7ee, #fff0e4 52%, #e8e4fa);
-  display: flex;
-  height: 190px;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
+.tour-copy {
+  padding: 18px 1px 20px;
 }
-.onboarding-icon {
-  align-items: center;
-  background: white;
-  border: 1px solid #efdce4;
-  border-radius: 22px;
-  box-shadow: 0 18px 42px #8a2c5230;
-  color: var(--blue);
-  display: flex;
-  height: 78px;
-  justify-content: center;
-  position: relative;
-  width: 78px;
-  z-index: 1;
+.tour-copy h2 {
+  font-family: var(--font-heading);
+  font-size: 25px;
+  letter-spacing: -0.7px;
+  line-height: 1.13;
+  margin: 0 0 10px;
 }
-.onboarding-orbit {
-  border: 1px solid #b53a6c2b;
-  border-radius: 50%;
-  position: absolute;
-}
-.onboarding-orbit.orbit-one {
-  height: 130px;
-  transform: rotate(12deg);
-  width: 260px;
-}
-.onboarding-orbit.orbit-two {
-  height: 245px;
-  transform: rotate(-15deg);
-  width: 420px;
-}
-.onboarding-copy {
-  padding: 30px 36px 24px;
-}
-.onboarding-copy h2 {
-  font-size: 28px;
-  letter-spacing: -1px;
-  margin: 7px 0 10px;
-}
-.onboarding-copy > p:not(.eyebrow) {
+.tour-copy > p {
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.6;
   margin: 0;
-  max-width: 570px;
 }
-.onboarding-tip {
+.tour-tip {
   align-items: center;
   background: #faf1f4;
   border: 1px solid #efdce4;
@@ -3132,41 +3214,84 @@ a:focus-visible {
   font-size: 11px;
   font-weight: 700;
   gap: 9px;
-  margin-top: 22px;
-  padding: 12px 14px;
+  margin-top: 18px;
+  padding: 11px 12px;
 }
-.onboarding-card footer {
-  align-items: center;
-  border-top: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  padding: 16px 36px;
+.tour-tip svg {
+  flex-shrink: 0;
 }
-.onboarding-dots {
-  display: flex;
-  gap: 7px;
-}
-.onboarding-dots button {
-  background: #dfd2d7;
-  border: 0;
+.tour-progress {
+  background: #ece8ea;
   border-radius: 99px;
   height: 7px;
-  padding: 0;
-  transition: width 0.2s ease, background 0.2s ease;
-  width: 7px;
+  overflow: hidden;
 }
-.onboarding-dots button.active {
+.tour-progress span {
   background: var(--blue);
-  width: 24px;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 0.22s ease;
 }
-.onboarding-actions {
-  display: flex;
-  gap: 8px;
+.tour-footer {
+  padding-top: 18px;
 }
-.onboarding-actions .primary-button {
+.tour-navigation {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto 1fr;
+}
+.tour-navigation > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 44px;
+  text-align: center;
+}
+.tour-navigation .primary-button,
+.tour-navigation .secondary-button {
   align-items: center;
   display: flex;
-  gap: 7px;
+  justify-content: center;
+  min-height: 44px;
+}
+.tour-navigation .primary-button {
+  gap: 6px;
+}
+.tour-navigation .secondary-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+.tour-skip {
+  background: #f7f4f5;
+  border: 0;
+  border-radius: 9px;
+  color: #65525a;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: 10px;
+  min-height: 44px;
+  width: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spotlight,
+  .tour-progress span,
+  .help-button {
+    transition: none;
+  }
+}
+@media (max-width: 520px) {
+  .help-button kbd {
+    display: none;
+  }
+  .tour-card-body {
+    padding: 18px;
+  }
+  .tour-copy h2 {
+    font-size: 22px;
+  }
 }
 .wizard {
   background: white;
