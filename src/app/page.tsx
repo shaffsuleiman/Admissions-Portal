@@ -35,6 +35,7 @@ import {
   draftProgrammeRules,
   extractDocument,
   loadWorkspaceData,
+  researchStudentMatches,
   runStudentMatch,
   saveConfirmedProfile,
   saveProgramme,
@@ -44,6 +45,8 @@ import {
   updateWorkspaceProfile,
   type Application,
   type DeadlineItem,
+  type LiveResearchMatch,
+  type LiveResearchResult,
   type MatchResult,
   type NewDeadlineInput,
   type NewStudentInput,
@@ -2226,6 +2229,9 @@ function MatchesView({
   const [filter, setFilter] = useState("All results");
   const [studentId, setStudentId] = useState(students[0]?.id ?? "");
   const [running, setRunning] = useState(false);
+  const [researching, setResearching] = useState(false);
+  const [liveResearch, setLiveResearch] =
+    useState<LiveResearchResult | null>(null);
   const [startingApplication, setStartingApplication] = useState("");
   const student = students.find((item) => item.id === studentId) ?? students[0];
   const studentMatches = matches.filter(
@@ -2243,6 +2249,24 @@ function MatchesView({
       onNotify(messageOf(error) ?? "Could not run matching");
     } finally {
       setRunning(false);
+    }
+  };
+  const runLiveResearch = async () => {
+    if (!student) return;
+    setResearching(true);
+    setLiveResearch(null);
+    try {
+      const result = await researchStudentMatches(student.id);
+      setLiveResearch(result);
+      onNotify(
+        result.matches.length
+          ? `${result.matches.length} cited live candidates researched`
+          : "No live candidates passed the evidence checks",
+      );
+    } catch (error) {
+      onNotify(messageOf(error) ?? "Live AI research failed");
+    } finally {
+      setResearching(false);
     }
   };
   if (!student)
@@ -2277,14 +2301,29 @@ function MatchesView({
           <FileText size={16} /> Shortlist report
         </button>
         {student.academic.confirmedAt ? (
-          <button
-            className="primary-button"
-            disabled={running}
-            onClick={() => void run()}
-          >
-            {running ? <span className="spinner" /> : <Sparkles size={16} />}{" "}
-            {running ? "Matching…" : "Run new match"}
-          </button>
+          <>
+            <button
+              className="secondary-button"
+              disabled={researching || running}
+              onClick={() => void runLiveResearch()}
+              aria-describedby="live-research-description"
+            >
+              {researching ? (
+                <span className="spinner dark" />
+              ) : (
+                <Search size={16} />
+              )}{" "}
+              {researching ? "Researching official sites…" : "Live AI research"}
+            </button>
+            <button
+              className="primary-button"
+              disabled={running || researching}
+              onClick={() => void run()}
+            >
+              {running ? <span className="spinner" /> : <Sparkles size={16} />}{" "}
+              {running ? "Matching…" : "Run saved catalogue"}
+            </button>
+          </>
         ) : (
           <button className="primary-button" onClick={() => onReview(student)}>
             <ShieldCheck size={16} /> Review profile first
@@ -2301,6 +2340,7 @@ function MatchesView({
               onChange={(event) => {
                 setStudentId(event.target.value);
                 setFilter("All results");
+                setLiveResearch(null);
               }}
             >
               {students.map((item) => (
@@ -2349,6 +2389,63 @@ function MatchesView({
           <ShieldCheck size={17} /> Open profile
         </button>
       </div>
+      <div className="live-research-intro" id="live-research-description">
+        <Sparkles size={16} />
+        <span>
+          <strong>Live AI research (Beta)</strong>
+          Searches current official university pages using anonymized academic facts. Every
+          extracted rule must cite a page the search tool opened; the deterministic engine still
+          decides the result.
+        </span>
+      </div>
+      {(researching || liveResearch) && (
+        <section className="live-research-results" aria-live="polite">
+          <header>
+            <div>
+              <span className="live-badge"><Search size={13} /> LIVE WEB</span>
+              <h2>Provisional researched candidates</h2>
+              <p>
+                {researching
+                  ? "Searching official sources and validating citations. This can take about a minute."
+                  : liveResearch?.summary || "Research completed."}
+              </p>
+            </div>
+            {liveResearch && (
+              <small>
+                Researched {new Date(liveResearch.researchedAt).toLocaleString("en-GB")}
+              </small>
+            )}
+          </header>
+          {researching ? (
+            <div className="live-research-loading">
+              <span className="spinner dark" />
+              <strong>The agent is opening and checking current university pages…</strong>
+            </div>
+          ) : liveResearch?.matches.length ? (
+            <div className="live-result-list">
+              {liveResearch.matches.map((match) => (
+                <LiveResearchCard key={match.id} match={match} />
+              ))}
+            </div>
+          ) : (
+            <div className="live-research-empty">
+              <CircleAlert size={20} />
+              <div>
+                <strong>No candidate passed the evidence gate</strong>
+                <p>
+                  {liveResearch?.discarded
+                    ? `${liveResearch.discarded} candidate${liveResearch.discarded === 1 ? " was" : "s were"} excluded because rules or citations were incomplete.`
+                    : "The search did not return enough current, citable admission data."}
+                </p>
+              </div>
+            </div>
+          )}
+          <footer>
+            These results are research leads, not admission guarantees. Verify the linked call for
+            applications before advising or applying.
+          </footer>
+        </section>
+      )}
       <div className="match-summary">
         <div>
           <strong>{studentMatches.length}</strong>
@@ -2435,6 +2532,17 @@ function MatchesView({
                   {match.university} <span>·</span> <MapPin size={13} />{" "}
                   {match.city}
                 </p>
+                {/^https?:\/\//.test(match.source) && (
+                  <a
+                    className="official-link"
+                    href={match.source}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Confirm ${match.programme} on the official ${match.university} website`}
+                  >
+                    Confirm on the official university page <ExternalLink size={12} />
+                  </a>
+                )}
                 <div className="programme-meta">
                   <span>
                     Annual tuition <b>{match.fee}</b>
@@ -2529,6 +2637,95 @@ function MatchesView({
         )}
       </div>
     </>
+  );
+}
+
+function LiveResearchCard({ match }: { match: LiveResearchMatch }) {
+  const code = match.university
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+  return (
+    <article className="live-result-card">
+      <div className="live-result-main">
+        <CampusMark
+          university={match.university}
+          code={code || "IT"}
+          tone="pink"
+          size="large"
+        />
+        <div className="match-title">
+          <div>
+            <Status text={match.status} />
+            <span className="fresh-label">
+              <Sparkles size={12} /> {match.confidence}% source confidence · provisional
+            </span>
+          </div>
+          <h2>{match.programme}</h2>
+          <p>
+            {match.university} <span>·</span> <MapPin size={13} /> {match.city}
+          </p>
+          <div className="programme-meta">
+            <span>
+              Annual tuition
+              <b>
+                {match.annualTuitionEur == null
+                  ? "Not confirmed"
+                  : `€${match.annualTuitionEur.toLocaleString()}`}
+              </b>
+            </span>
+            <span>
+              Application deadline
+              <b>{match.applicationDeadline || "Not confirmed"}</b>
+            </span>
+            <span>
+              Intake <b>{match.intake || match.academicYear}</b>
+            </span>
+          </div>
+        </div>
+        <div className="large-score">
+          <strong className={scoreTone(match.status)}>
+            {match.score}<small>%</small>
+          </strong>
+          <span>rank score</span>
+        </div>
+      </div>
+      <div className="live-checks">
+        {match.checks.map((check, index) => (
+          <span
+            key={`${check.key}-${index}`}
+            className={
+              check.outcome === "fail"
+                ? "fail"
+                : check.outcome === "borderline"
+                  ? "warn"
+                  : ""
+            }
+          >
+            {check.outcome === "fail" ? (
+              <X size={13} />
+            ) : check.outcome === "borderline" ? (
+              <CircleAlert size={13} />
+            ) : (
+              <Check size={13} />
+            )}
+            {check.detail}
+          </span>
+        ))}
+      </div>
+      <footer className="live-sources">
+        <span>Sources opened by the research tool</span>
+        <div>
+          {match.sources.map((source) => (
+            <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+              {source.title} <ExternalLink size={12} />
+            </a>
+          ))}
+        </div>
+      </footer>
+    </article>
   );
 }
 

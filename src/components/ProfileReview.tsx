@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileText, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import type { TranscriptExtraction } from "@/lib/ai/schemas";
-import { DEFAULT_CONVERSION, SUBJECT_AREAS, toItalian110 } from "@/lib/matching/engine";
+import { DEFAULT_CONVERSION, SUBJECT_AREAS, studentEctsRatio, toItalian110 } from "@/lib/matching/engine";
 import { messageOf, type ConfirmedProfileInput, type Student, type StudentDocument } from "@/lib/supabase/workspace-data";
 
 type CourseRow = { key: string; title: string; creditHours: string; grade: string; area: string };
@@ -184,6 +184,8 @@ export function ProfileReview({
     return [...byArea.entries()].sort((a, b) => b[1] - a[1]);
   }, [courses]);
 
+  const personalRatio = studentEctsRatio({ yearsOfEducation: toNumber(years), totalCreditHours: toNumber(creditHours) });
+  const ectsPerHour = personalRatio?.ratio ?? DEFAULT_CONVERSION.ectsPerCreditHour;
   const cgpaValue = toNumber(cgpa);
   const scaleValue = toNumber(scale);
   const grade110 = cgpaValue != null && scaleValue ? toItalian110(cgpaValue, scaleValue) : null;
@@ -351,10 +353,16 @@ export function ProfileReview({
               <h3>3. Map courses to subject areas</h3>
               <p>Programmes require credits per subject area. Check each course’s area; totals update as you go.</p>
             </div>
+            {/* Same arithmetic the matching engine uses: degree ECTS ÷ total credit hours on the HEC transcript. */}
+            <p className="ects-working">
+              {personalRatio
+                ? <>{personalRatio.degreeEcts} ECTS ÷ {personalRatio.totalCreditHours} credit hours = <b>{personalRatio.ratio.toFixed(2)} ECTS per credit hour</b> (e.g. a 3-credit course ≈ {(3 * personalRatio.ratio).toFixed(1)} ECTS)</>
+                : <>Add years of education and total credit hours to use this student’s own ratio. Using the standard {DEFAULT_CONVERSION.ectsPerCreditHour} ECTS per credit hour for now.</>}
+            </p>
             <div className="area-totals">
               {totals.map(([area, hours]) => (
                 <span key={area}>
-                  <b>{area}</b> {Math.round(hours * 10) / 10} cr ≈ {Math.round(hours * DEFAULT_CONVERSION.ectsPerCreditHour)} ECTS
+                  <b>{area}</b> {Math.round(hours * 10) / 10} cr ≈ {Math.round(hours * ectsPerHour)} ECTS
                 </span>
               ))}
               {!totals.length && <span className="review-muted">No credits yet. Read the transcript or add courses.</span>}

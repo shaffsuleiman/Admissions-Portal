@@ -161,6 +161,36 @@ export type MatchResult = {
   generatedAt: string;
 };
 
+export type LiveResearchMatch = {
+  id: string;
+  university: string;
+  programme: string;
+  city: string;
+  degreeLevel: string;
+  teachingLanguage: string;
+  annualTuitionEur: number | null;
+  intake: string;
+  applicationDeadline: string | null;
+  applicationUrl: string;
+  academicYear: string;
+  status: "Eligible" | "Borderline" | "Not eligible";
+  score: number;
+  eligibilityScore: number;
+  fitScore: number | null;
+  checks: Check[];
+  confidence: number;
+  notes: string;
+  evidence: { field: string; quote: string; url: string }[];
+  sources: { title: string; url: string }[];
+};
+
+export type LiveResearchResult = {
+  matches: LiveResearchMatch[];
+  discarded: number;
+  summary: string;
+  researchedAt: string;
+};
+
 export type Application = {
   id: string;
   studentId: string;
@@ -1218,6 +1248,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
   const student = {
     degreeTitle: facts.degreeTitle,
     yearsOfEducation: facts.yearsOfEducation,
+    totalCreditHours: facts.totalCreditHours,
     cgpa: facts.cgpa,
     cgpaScale: facts.cgpaScale,
     englishTest:
@@ -1295,6 +1326,28 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     metadata: { programme_count: rows.length },
   });
   return rows.length;
+}
+
+/** Researches current official sources without exposing student identity to the model. */
+export async function researchStudentMatches(
+  studentId: string,
+): Promise<LiveResearchResult> {
+  const response = await fetch("/api/matches/live-research", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ studentId }),
+  });
+  const body = (await response.json().catch(() => ({}))) as Partial<
+    LiveResearchResult & { error: string }
+  >;
+  if (!response.ok)
+    throw new Error(body.error ?? "Live AI research failed.");
+  return {
+    matches: body.matches ?? [],
+    discarded: body.discarded ?? 0,
+    summary: body.summary ?? "",
+    researchedAt: body.researchedAt ?? new Date().toISOString(),
+  };
 }
 
 /** Asks the server to read one uploaded document with AI. Nothing is confirmed until review. */

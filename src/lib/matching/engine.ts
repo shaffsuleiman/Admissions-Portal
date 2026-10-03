@@ -57,7 +57,9 @@ export type StudentFacts = {
   cgpaScale: number | null;
   englishTest: { type: "IELTS" | "TOEFL" | string; score: number } | null;
   mediumOfInstruction: boolean;
-  /** Confirmed credits per subject area. creditHours are converted per university. */
+  /** Total credit hours on the HEC transcript; sets the student's own ECTS ratio. */
+  totalCreditHours?: number | null;
+  /** Confirmed credits per subject area, converted with the student's own ratio when known. */
   credits: { area: string; creditHours: number | null; ects: number | null }[];
 };
 
@@ -93,6 +95,23 @@ export function toItalian110(cgpa: number, scale: number, passRatio = DEFAULT_CO
   if (scale <= 0 || passRatio < 0 || passRatio >= 1 || scale <= minimum) return 0;
   const value = 66 + ((cgpa - minimum) / (scale - minimum)) * 44;
   return Math.max(0, Math.min(110, round1(value)));
+}
+
+/** ECTS awarded for a whole degree: 60 per year (1yr = 60, 2yr = 120, 3yr = 180, 4yr = 240). */
+export const degreeEcts = (years: number) => years * 60;
+
+/**
+ * Student-specific ECTS per credit hour, from their own HEC transcript:
+ * degree ECTS ÷ total credit hours (e.g. 240 ÷ 133 = 1.80). Degree length is the
+ * years of education beyond 12 years of schooling. Returns null when the transcript
+ * data is missing or gives an implausible ratio, so the university's rule applies.
+ */
+export function studentEctsRatio(student: Pick<StudentFacts, "yearsOfEducation" | "totalCreditHours">) {
+  const years = student.yearsOfEducation != null ? student.yearsOfEducation - 12 : null;
+  const hours = student.totalCreditHours ?? null;
+  if (!years || years < 1 || years > 6 || !hours || hours <= 0) return null;
+  const ratio = Math.round((degreeEcts(years) / hours) * 100) / 100;
+  return ratio >= 1.2 && ratio <= 2.6 ? { ratio, degreeEcts: degreeEcts(years), totalCreditHours: hours } : null;
 }
 
 export function studentEcts(credit: StudentFacts["credits"][number], conversion: Conversion) {
@@ -207,7 +226,10 @@ export function evaluate(
     dataConfidence?: number | null;
   } = {},
 ): Evaluation {
-  const conversion = options.conversion ?? DEFAULT_CONVERSION;
+  const universityConversion = options.conversion ?? DEFAULT_CONVERSION;
+  // The student's own transcript ratio (degree ECTS ÷ total credit hours) wins when known.
+  const personal = studentEctsRatio(student);
+  const conversion = personal ? { ...universityConversion, ectsPerCreditHour: personal.ratio } : universityConversion;
   const today = options.today ?? new Date();
   const checks: Check[] = [];
 
@@ -254,14 +276,13 @@ export function evaluate(
       });
   }
 
-  // 2. Subject-area credits, converted with this university's ratio
+  // 2. Subject-area credits, converted with the student's own ratio (or the university's)
   for (const requirement of rules.subjectCredits ?? []) {
     if (!requirement.ects) continue;
-    const actual = round1(
-      student.credits
-        .filter((credit) => credit.area.toLowerCase() === requirement.area.toLowerCase())
-        .reduce((sum, credit) => sum + studentEcts(credit, conversion), 0),
-    );
+    const areaCredits = student.credits.filter((credit) => credit.area.toLowerCase() === requirement.area.toLowerCase());
+    const actual = round1(areaCredits.reduce((sum, credit) => sum + studentEcts(credit, conversion), 0));
+    const hours = round1(areaCredits.reduce((sum, credit) => sum + (credit.creditHours ?? 0), 0));
+    const working = personal && hours > 0 ? ` · ${hours} cr × ${personal.ratio.toFixed(2)} ECTS per credit hour` : "";
     const outcome = compare(actual, requirement.ects);
     const shortBy = round1(requirement.ects - actual);
     checks.push({
@@ -269,9 +290,9 @@ export function evaluate(
       label: `${requirement.area} credits`,
       outcome,
       detail:
-        outcome === "pass"
+        (outcome === "pass"
           ? `${requirement.area}: ${actual} / ${requirement.ects} ECTS`
-          : `Short by ${shortBy} ECTS in ${requirement.area.toLowerCase()} (${actual} / ${requirement.ects})`,
+          : `Short by ${shortBy} ECTS in ${requirement.area.toLowerCase()} (${actual} / ${requirement.ects})`) + working,
       score: thresholdScore(actual, requirement.ects),
     });
   }

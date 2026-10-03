@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { degreeMatchesField, evaluate, normalizeRules, serializeRules, toItalian110, type StudentFacts } from "./engine.ts";
+import { degreeMatchesField, evaluate, studentEctsRatio, normalizeRules, serializeRules, toItalian110, type StudentFacts } from "./engine.ts";
 
 const student = (overrides: Partial<StudentFacts> = {}): StudentFacts => ({
   yearsOfEducation: 16,
@@ -198,4 +198,18 @@ test("common Pakistani degree abbreviations match their fields", () => {
   assert.equal(degreeMatchesField("BSSE", "Computer science"), true);
   assert.equal(degreeMatchesField("BE Mechanical", "Any field of Engineering"), true);
   assert.equal(degreeMatchesField("BS Accounting and Finance", "Building Engineering"), false);
+});
+
+test("student-specific ECTS ratio from the HEC transcript (240 ÷ 133 = 1.80)", () => {
+  assert.deepEqual(studentEctsRatio({ yearsOfEducation: 16, totalCreditHours: 133 }), { ratio: 1.8, degreeEcts: 240, totalCreditHours: 133 });
+  assert.equal(studentEctsRatio({ yearsOfEducation: 15, totalCreditHours: 100 })?.degreeEcts, 180);
+  assert.equal(studentEctsRatio({ yearsOfEducation: 16, totalCreditHours: null }), null);
+  assert.equal(studentEctsRatio({ yearsOfEducation: 16, totalCreditHours: 20 }), null); // implausible, ignored
+  // 124 credit hours gives a more generous 1.94 per credit hour than the flat 1.8.
+  const rules = { subjectCredits: [{ area: "Mathematics", ects: 19 }] };
+  const flat = evaluate(student(), rules, { today });
+  const personal = evaluate(student({ totalCreditHours: 124 }), rules, { today });
+  assert.equal(flat.checks[0].outcome, "borderline");
+  assert.equal(personal.checks[0].outcome, "pass");
+  assert.match(personal.checks[0].detail, /10 cr × 1\.94 ECTS per credit hour/);
 });
