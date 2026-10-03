@@ -5919,3 +5919,8 @@ body.report-open {
 .ects-working b { color: var(--ink); }
 .official-link { align-items: center; color: var(--blue); display: inline-flex; font-size: 12px; font-weight: 700; gap: 4px; margin-top: 6px; text-decoration: none; }
 .official-link:hover { text-decoration: underline; }
+.auth-home-link {
+  color: inherit;
+  display: inline-block;
+  text-decoration: none;
+}

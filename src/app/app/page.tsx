@@ -11,13 +11,14 @@ import {
   useState,
 } from "react";
 import Image, { type StaticImageData } from "next/image";
-import bolognaPhoto from "../../public/images/campus/bologna.jpg";
-import milanPhoto from "../../public/images/campus/milan.jpg";
-import paduaPhoto from "../../public/images/campus/padua.jpg";
-import pisaPhoto from "../../public/images/campus/pisa.jpg";
-import romePhoto from "../../public/images/campus/rome.jpg";
-import turinPhoto from "../../public/images/campus/turin.jpg";
-import venicePhoto from "../../public/images/campus/venice.jpg";
+import Link from "next/link";
+import bolognaPhoto from "../../../public/images/campus/bologna.jpg";
+import milanPhoto from "../../../public/images/campus/milan.jpg";
+import paduaPhoto from "../../../public/images/campus/padua.jpg";
+import pisaPhoto from "../../../public/images/campus/pisa.jpg";
+import romePhoto from "../../../public/images/campus/rome.jpg";
+import turinPhoto from "../../../public/images/campus/turin.jpg";
+import venicePhoto from "../../../public/images/campus/venice.jpg";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { ProfileReview } from "@/components/ProfileReview";
@@ -335,7 +336,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     const { error } = await createSupabaseClient().auth.resetPasswordForEmail(
       email,
       {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/?recovery=1")}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/app?recovery=1")}`,
       },
     );
     setMessage(
@@ -354,7 +355,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/app`,
         data: {
           full_name: fullName.trim() || fallbackName,
           workspace_name: workspaceName.trim() || `${fallbackName}'s workspace`,
@@ -383,7 +384,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           sizes="(max-width: 820px) 100vw, 55vw"
         />
         <div className="auth-story-veil" />
-        <Brand light />
+        <Link href="/" className="auth-home-link" aria-label="Eligify website">
+          <Brand light />
+        </Link>
         <div className="story-copy">
           <h1>
             Every student deserves a <em>clear path</em> abroad.
@@ -435,7 +438,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       </section>
       <section className="auth-panel">
         <div className="mobile-brand">
-          <Brand />
+          <Link href="/" className="auth-home-link" aria-label="Eligify website">
+            <Brand />
+          </Link>
         </div>
         <div className="auth-box">
           <p className="eyebrow">
@@ -601,7 +606,7 @@ function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void;
     const { error: updateError } = await createSupabaseClient().auth.updateUser({ password });
     setLoading(false);
     if (updateError) return setError(authErrorMessage(updateError));
-    window.history.replaceState({}, "", "/");
+    window.history.replaceState({}, "", "/app");
     onComplete();
   };
 
@@ -5231,7 +5236,7 @@ export default function Home() {
       <ResetPasswordScreen
         onComplete={() => setRecoveringPassword(false)}
         onCancel={() => {
-          window.history.replaceState({}, "", "/");
+          window.history.replaceState({}, "", "/app");
           setRecoveringPassword(false);
           logout();
         }}
