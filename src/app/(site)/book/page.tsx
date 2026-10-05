@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { Check } from "lucide-react";
+import { CalendarCheck2, Check, Clock3, ShieldCheck, Video } from "lucide-react";
 import turinPhoto from "../../../../public/images/campus/turin.jpg";
 import { PHOTOS, PLANS } from "../content";
 import { ConsultationForm } from "../EnquiryForms";
@@ -16,21 +16,39 @@ export default async function BookPage({ searchParams }: PageProps<"/book">) {
 
   return (
     <>
-      <section className="site-page-head">
-        <div className="site-shell">
-          <p className="eyebrow">BOOK A CONSULTATION</p>
-          <h1>See Eligify with your own students</h1>
-          <p className="site-lede">
-            A free 30 minute video call. Pick a day and time that suits you and we will confirm by email.
-          </p>
+      <section className="site-page-head site-book-head">
+        <div className="site-shell site-book-head-inner">
+          <div>
+            <p className="eyebrow">BOOK A CONSULTATION</p>
+            <h1>See what Eligify changes for your team.</h1>
+            <p className="site-lede">
+              Bring a real student profile and we will show you the complete journey from documents to a defensible shortlist.
+            </p>
+          </div>
+          <aside className="site-book-summary" aria-label="Consultation details">
+            <div className="site-book-summary-head">
+              <span><Video size={18} /></span>
+              <div><small>FREE PRODUCT WALKTHROUGH</small><strong>A focused working session</strong></div>
+            </div>
+            <div className="site-book-facts">
+              <span><Clock3 size={15} /><b>30 minutes</b><small>Video call</small></span>
+              <span><CalendarCheck2 size={15} /><b>Your timezone</b><small>You choose the day</small></span>
+              <span><ShieldCheck size={15} /><b>No commitment</b><small>No card required</small></span>
+            </div>
+          </aside>
         </div>
       </section>
       <section className="site-section site-section-flush">
-        <div className="site-shell site-form-layout">
+        <div className="site-shell site-form-layout site-book-layout">
           <div className="site-form-card">
+            <div className="site-form-intro">
+              <p className="eyebrow">REQUEST A TIME</p>
+              <h2>Choose what works for you</h2>
+              <p>Tell us who is joining and your preferred time. We will confirm the meeting by email.</p>
+            </div>
             <ConsultationForm plan={planId} />
           </div>
-          <aside className="site-aside site-aside-photo">
+          <aside className="site-aside site-aside-photo site-book-aside">
             <figure>
               <Image src={turinPhoto} alt="Valentino Castle in Turin" sizes="(max-width: 900px) 100vw, 34vw" placeholder="blur" />
               <figcaption>{PHOTOS.turin}</figcaption>

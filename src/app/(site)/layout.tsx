@@ -22,19 +22,26 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
       <main id="main">{children}</main>
       <footer className="site-footer">
         <div className="site-shell site-footer-inner">
-          <div>
+          <div className="site-footer-brand">
             <Link href="/" aria-label="Eligify home">
               <SiteBrand />
             </Link>
             <p>Admissions matching for consultancies sending students to Italy.</p>
           </div>
-          <nav aria-label="Footer">
-            <Link href="/about">About</Link>
-            <Link href="/pricing">Pricing</Link>
-            <Link href="/contact">Contact</Link>
-            <Link href="/book">Book a consultation</Link>
-            <Link href="/app">Sign in</Link>
-          </nav>
+          <div className="site-footer-links">
+            <nav aria-label="Product">
+              <strong>Product</strong>
+              <Link href="/#how-it-works">How it works</Link>
+              <Link href="/pricing">Pricing</Link>
+              <Link href="/book">Book a demo</Link>
+            </nav>
+            <nav aria-label="Company">
+              <strong>Company</strong>
+              <Link href="/about">About</Link>
+              <Link href="/contact">Contact</Link>
+              <Link href="/app">Sign in</Link>
+            </nav>
+          </div>
         </div>
         <div className="site-shell site-footer-base">
           <small>© {new Date().getFullYear()} Eligify</small>

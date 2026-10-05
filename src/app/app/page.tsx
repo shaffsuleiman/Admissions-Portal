@@ -930,9 +930,6 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
     Programme | "new" | null
   >(null);
   const [tutorialOpen, setTutorialOpen] = useState(false);
-  const [realtimeStatus, setRealtimeStatus] = useState<
-    "connecting" | "live" | "offline"
-  >("connecting");
   const tutorialPrompted = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -1043,36 +1040,24 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     const workspaceId = data?.workspace.id;
     if (!workspaceId) return;
-    let cancelled = false;
     const sync = async () => {
       if (document.visibilityState === "hidden" || !navigator.onLine) return;
-      setRealtimeStatus("connecting");
-      const ok = await refresh();
-      if (!cancelled) setRealtimeStatus(ok ? "live" : "offline");
+      await refresh();
     };
     const onFocus = () => void sync();
     const onVisibility = () => {
       if (document.visibilityState === "visible") void sync();
     };
     const onOnline = () => void sync();
-    const onOffline = () => setRealtimeStatus("offline");
-    const statusTimer = window.setTimeout(
-      () => setRealtimeStatus(navigator.onLine ? "live" : "offline"),
-      0,
-    );
     const interval = window.setInterval(() => void sync(), 15_000);
     window.addEventListener("focus", onFocus);
     window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      cancelled = true;
-      window.clearTimeout(statusTimer);
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [data?.workspace.id, refresh]);
@@ -1259,9 +1244,6 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               />
               <kbd>⌘ K</kbd>
             </form>
-            <span className={`live-sync ${realtimeStatus}`} title="Automatic workspace updates">
-              <i /> {realtimeStatus === "live" ? "Auto sync" : realtimeStatus === "offline" ? "Offline" : "Syncing"}
-            </span>
             <button
               className="help-button"
               aria-label="Open quick-start tutorial"

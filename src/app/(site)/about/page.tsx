@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BookOpenCheck, Link2, UserCheck } from "lucide-react";
+import { ArrowRight, BadgeCheck, BookOpenCheck, Link2, UserCheck } from "lucide-react";
 import pisaPhoto from "../../../../public/images/campus/pisa.jpg";
 import { CATALOGUE, PHOTOS } from "../content";
 
@@ -31,20 +31,34 @@ const PRINCIPLES = [
 export default function AboutPage() {
   return (
     <>
-      <section className="site-page-head">
-        <div className="site-shell">
-          <p className="eyebrow">ABOUT ELIGIFY</p>
-          <h1>Fair, checkable advice for every student going to Italy</h1>
-          <p className="site-lede">
-            Eligify is admissions software for study-abroad consultancies. We started with Italy because its
-            English-taught programmes are excellent value and their entry rules are hard to compare.
-          </p>
+      <section className="site-page-head site-about-head">
+        <div className="site-shell site-about-head-grid">
+          <div>
+            <p className="eyebrow">ABOUT ELIGIFY</p>
+            <h1>Fair, checkable advice for every student going to Italy</h1>
+            <p className="site-lede">
+              Eligify is admissions software for study-abroad consultancies. We started with Italy because its
+              English-taught programmes are excellent value and their entry rules are hard to compare.
+            </p>
+          </div>
+          <aside className="site-about-standard" aria-label="The Eligify standard">
+            <div className="site-about-standard-head">
+              <span><BadgeCheck size={18} /></span>
+              <div><small>THE ELIGIFY STANDARD</small><strong>Every recommendation can be checked.</strong></div>
+            </div>
+            <ol>
+              <li><b>01</b><span>University source attached</span></li>
+              <li><b>02</b><span>Entry criteria explained plainly</span></li>
+              <li><b>03</b><span>Counsellor confirms before sharing</span></li>
+            </ol>
+            <p>No black-box recommendations. No unexplained scores.</p>
+          </aside>
         </div>
       </section>
 
       <section className="site-section">
         <div className="site-shell site-split">
-          <div>
+          <div className="site-story-copy">
             <h2>The problem we kept seeing</h2>
             <p>
               A student with a four year degree and 133 credit hours applies to a programme that asks for 180 ECTS. Is

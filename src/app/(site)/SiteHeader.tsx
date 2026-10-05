@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 
 const LINKS = [
+  { href: "/", label: "Product" },
   { href: "/about", label: "About" },
   { href: "/pricing", label: "Pricing" },
   { href: "/contact", label: "Contact" },
@@ -55,14 +56,15 @@ export function SiteHeader() {
               key={link.href}
               href={link.href}
               aria-current={pathname === link.href ? "page" : undefined}
+              onClick={() => setOpenPath(null)}
             >
               {link.label}
             </Link>
           ))}
-          <Link href="/app" className="site-signin">
+          <Link href="/app" className="site-signin" onClick={() => setOpenPath(null)}>
             Sign in
           </Link>
-          <Link href="/book" className="primary-button site-cta">
+          <Link href="/book" className="primary-button site-cta" onClick={() => setOpenPath(null)}>
             Book a consultation
           </Link>
         </nav>

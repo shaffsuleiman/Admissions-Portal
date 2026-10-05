@@ -3,14 +3,23 @@ import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
+  Bell,
+  BookOpen,
+  CalendarDays,
   CalendarClock,
+  ChevronRight,
+  CheckCircle2,
+  FileCheck2,
   FileText,
+  LayoutDashboard,
   Link2,
+  Plus,
   Scale,
   ScanText,
+  Search,
+  Sparkles,
   Users,
 } from "lucide-react";
-import romePhoto from "../../../public/images/campus/rome.jpg";
 import milanPhoto from "../../../public/images/campus/milan.jpg";
 import { CATALOGUE, PHOTOS } from "./content";
 
@@ -68,8 +77,8 @@ export default function HomePage() {
       <section className="site-hero">
         <div className="site-shell site-hero-inner">
           <div className="site-hero-copy">
-            <p className="eyebrow">ADMISSIONS MATCHING FOR ITALY</p>
-            <h1>Know which Italian programmes each student can really get into.</h1>
+            <p className="eyebrow"><Sparkles size={13} /> ADMISSIONS INTELLIGENCE FOR ITALY</p>
+            <h1>Turn every student profile into a <span>defensible shortlist.</span></h1>
             <p className="site-lede">
               Eligify reads your students&apos; documents, converts their credits fairly and checks them against{" "}
               {CATALOGUE.programmes} English-taught programmes at {CATALOGUE.universities} universities. Your
@@ -83,46 +92,76 @@ export default function HomePage() {
                 See pricing
               </Link>
             </div>
-          </div>
-          <figure className="site-hero-photo">
-            <Image
-              src={romePhoto}
-              alt="Sapienza University of Rome"
-              preload
-              sizes="(max-width: 900px) 100vw, 46vw"
-              placeholder="blur"
-            />
-            <div className="site-hero-card" aria-hidden="true">
-              <span className="site-pill site-pill-ok">Exact match</span>
-              <strong>MSc Data Science</strong>
-              <small>Credits 128 of 120 ECTS · IELTS 6.5 of 6.0</small>
+            <div className="site-hero-proof" aria-label="Product benefits">
+              <span><CheckCircle2 size={15} /> No card required</span>
+              <span><CheckCircle2 size={15} /> Official sources</span>
+              <span><CheckCircle2 size={15} /> Human-reviewed</span>
             </div>
-            <figcaption>{PHOTOS.rome}</figcaption>
-          </figure>
+          </div>
+          <div className="site-product-wrap">
+            <div className="site-product-glow" aria-hidden="true" />
+            <div className="site-product-frame">
+              <div className="site-product-body">
+                <aside className="site-product-nav" aria-hidden="true">
+                  <div className="site-preview-brand"><i /><i /><i /></div>
+                  <small>WORKSPACE</small>
+                  <span className="is-active"><LayoutDashboard size={13} /> Overview</span>
+                  <span><Users size={13} /> Students</span>
+                  <span><Sparkles size={13} /> Matches</span>
+                  <span><BookOpen size={13} /> Programmes</span>
+                </aside>
+                <div className="site-product-workspace">
+                  <div className="site-product-topbar">
+                    <div><span>Workspace</span><ChevronRight size={10} /><strong>Overview</strong></div>
+                    <div><Search size={12} /><Bell size={12} /><span className="site-preview-avatar">AK</span></div>
+                  </div>
+                  <div className="site-product-main">
+                    <div className="site-preview-welcome">
+                      <Image src={milanPhoto} alt="" sizes="480px" />
+                      <div>
+                        <small>MONDAY, 5 OCTOBER</small>
+                        <strong>Good morning, Ayesha.</strong>
+                        <span>Here&apos;s what needs your attention.</span>
+                      </div>
+                      <button type="button"><Plus size={11} /> New student</button>
+                    </div>
+                    <div className="site-preview-metrics">
+                      <div><span className="blue"><Users size={12} /></span><small>Active students</small><strong>24</strong><em>3 need review</em></div>
+                      <div><span className="violet"><Sparkles size={12} /></span><small>Matches generated</small><strong>186</strong><em>42 eligible</em></div>
+                      <div><span className="orange"><CalendarDays size={12} /></span><small>Due this week</small><strong>04</strong><em>11 upcoming</em></div>
+                      <div><span className="green"><FileCheck2 size={12} /></span><small>Applications live</small><strong>18</strong><em>Across 9 students</em></div>
+                    </div>
+                    <div className="site-preview-panels">
+                      <div className="site-preview-focus">
+                        <div><small>FOCUS FOR TODAY</small><strong>3 profiles need your review</strong></div>
+                        <div className="site-preview-row"><span className="violet"><Sparkles size={12} /></span><p><b>Review Samira&apos;s profile</b><small>82% complete · updated today</small></p><ChevronRight size={12} /></div>
+                        <div className="site-preview-row"><span className="blue"><ScanText size={12} /></span><p><b>Confirm Bilal&apos;s transcript</b><small>Document reading complete</small></p><ChevronRight size={12} /></div>
+                      </div>
+                      <div className="site-preview-deadlines">
+                        <div><small>UPCOMING</small><strong>Deadlines</strong></div>
+                        <div><b>12<small>NOV</small></b><p>University of Bologna<span>Samira Khan</span></p><em>8 days</em></div>
+                        <div><b>18<small>NOV</small></b><p>University of Padua<span>Hassan Ali</span></p><em>14 days</em></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="site-floating-card site-floating-card-top" aria-hidden="true">
+              <span><ScanText size={14} /></span>
+              <div><strong>Profile ready to review</strong><small>22 subjects identified</small></div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="site-stats" aria-label="Catalogue">
-        <div className="site-shell site-stats-inner">
-          <div>
-            <strong>{CATALOGUE.programmes}</strong>
-            <span>English-taught programmes</span>
-          </div>
-          <div>
-            <strong>{CATALOGUE.universities}</strong>
-            <span>Italian universities</span>
-          </div>
-          <div>
-            <strong>100%</strong>
-            <span>of results linked to an official page</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="site-section">
+      <section className="site-section" id="how-it-works">
         <div className="site-shell">
-          <p className="eyebrow">HOW IT WORKS</p>
-          <h2>From documents to a shortlist in one sitting</h2>
+          <div className="site-section-head">
+            <p className="eyebrow">HOW IT WORKS</p>
+            <h2>From documents to a shortlist in one sitting</h2>
+            <p>A repeatable, reviewable workflow your whole counselling team can trust.</p>
+          </div>
           <ol className="site-steps">
             {STEPS.map((step, index) => (
               <li key={step.title}>
@@ -137,8 +176,11 @@ export default function HomePage() {
 
       <section className="site-section site-section-tint">
         <div className="site-shell">
-          <p className="eyebrow">WHAT YOU GET</p>
-          <h2>Everything a counsellor needs to advise with confidence</h2>
+          <div className="site-section-head">
+            <p className="eyebrow">THE PLATFORM</p>
+            <h2>Everything a counsellor needs to advise with confidence</h2>
+            <p>One workspace for eligibility, programme research, deadlines and client-ready reporting.</p>
+          </div>
           <div className="site-features">
             {FEATURES.map(({ icon: Icon, title, body }) => (
               <article key={title}>
