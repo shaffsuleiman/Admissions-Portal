@@ -254,7 +254,7 @@ function CampusMark({
   if (!campus) return <span className={`${className} ${tone}`}>{code}</span>;
   return (
     <span className={`${className} campus-mark`}>
-      <Image src={campus.photo} alt={campus.place} fill sizes="64px" />
+      <Image src={campus.photo} alt={campus.place} fill sizes="64px" placeholder="blur" />
     </span>
   );
 }
@@ -443,9 +443,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </Link>
         </div>
         <div className="auth-box">
-          <p className="eyebrow">
-            {signingUp ? "GET STARTED" : "WELCOME BACK"}
-          </p>
           <h2>
             {signingUp ? "Create your workspace" : "Sign in to your workspace"}
           </h2>
@@ -624,7 +621,6 @@ function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void;
       <section className="auth-panel">
         <div className="mobile-brand"><Brand /></div>
         <div className="auth-box">
-          <p className="eyebrow">ACCOUNT RECOVERY</p>
           <h2>Set a new password</h2>
           <p className="muted">Use at least eight characters and avoid reusing an old password.</p>
           <form onSubmit={submit}>
@@ -1581,12 +1577,10 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
 }
 
 function PageTitle({
-  eyebrow,
   title,
   text,
   children,
 }: {
-  eyebrow: string;
   title: string;
   text: string;
   children?: React.ReactNode;
@@ -1594,7 +1588,6 @@ function PageTitle({
   return (
     <header className="page-title">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
         <p>{text}</p>
       </div>
@@ -1685,8 +1678,7 @@ function Overview({
       weekday: "long",
       day: "numeric",
       month: "long",
-    })
-    .toUpperCase();
+    });
   const firstName = user.name.split(" ")[0];
   const hour = new Date().getHours();
   const greeting =
@@ -1705,12 +1697,13 @@ function Overview({
           sizes="(max-width: 820px) 100vw, 1200px"
         />
         <div className="welcome-hero-copy">
-          <p className="eyebrow">{dateLabel}</p>
           <h1>
             {greeting}
             {firstName ? `, ${firstName}` : ""}.
           </h1>
-          <p>Here’s what needs your attention across your workspace.</p>
+          <p>
+            <time>{dateLabel}</time> · Here’s what needs your attention across your workspace.
+          </p>
           <div className="page-actions">
             <button
               className="secondary-button"
@@ -1763,7 +1756,6 @@ function Overview({
         <div className="panel focus-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">FOCUS FOR TODAY</p>
               <h2>
                 {attentionStudents.length
                   ? `${plural(attentionStudents.length, "profile")} ${attentionStudents.length === 1 ? "needs" : "need"} your review`
@@ -1805,8 +1797,7 @@ function Overview({
         <div className="panel deadline-card">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">UPCOMING</p>
-              <h2>Deadlines</h2>
+              <h2>Upcoming deadlines</h2>
             </div>
             <button
               className="icon-button"
@@ -1856,7 +1847,6 @@ function Overview({
         <div className="panel recommended-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">LATEST MATCH RUN</p>
               <h2>
                 {latestStudent
                   ? `${latestStudent.name.split(" ")[0]}’s top matches`
@@ -1922,7 +1912,6 @@ function Overview({
           <div className="impact-orbit">
             <Zap size={21} />
           </div>
-          <p className="eyebrow">YOUR WORKSPACE</p>
           <h2>
             {students.length} student{" "}
             {students.length === 1 ? "profile" : "profiles"} in one secure
@@ -2055,7 +2044,6 @@ function StudentsView({
   return (
     <>
       <PageTitle
-        eyebrow="STUDENT WORKSPACE"
         title="Students"
         text="Every profile, document, match, and application in one place."
       >
@@ -2335,7 +2323,6 @@ function MatchesView({
     return (
       <>
         <PageTitle
-          eyebrow="ELIGIBILITY ENGINE"
           title="Match centre"
           text="Add a student before running reviewed programme matching."
         />
@@ -2351,7 +2338,6 @@ function MatchesView({
   return (
     <>
       <PageTitle
-        eyebrow="ELIGIBILITY ENGINE"
         title="Match centre"
         text="Evidence-backed AI-reviewed and human-verified rules are matched by the deterministic engine. AI-reviewed results remain provisional."
       >
@@ -3023,7 +3009,6 @@ function ProgrammesView({
     return (
       <>
         <PageTitle
-          eyebrow="OFFICIAL MUR DIRECTORY"
           title="Italian universities"
           text="Every institution currently listed in the Ministry’s USTAT university directory."
         >
@@ -3155,7 +3140,6 @@ function ProgrammesView({
   return (
     <>
       <PageTitle
-        eyebrow="ADMISSIONS DATABASE"
         title="Programmes"
         text="Current entry rules, tuition, and deadlines, linked to primary sources."
       >
@@ -3473,7 +3457,6 @@ function ApplicationsView({
   return (
     <>
       <PageTitle
-        eyebrow="APPLICATION TRACKER"
         title="Applications"
         text="Every stage below is loaded from and saved back to your workspace."
       >
@@ -3651,7 +3634,6 @@ function NewDeadlineModal({
       <form className="wizard deadline-modal" role="dialog" aria-modal="true" aria-labelledby="deadline-modal-title" onSubmit={save}>
         <header>
           <div>
-            <p className="eyebrow">DEADLINE CONTROL</p>
             <h2 id="deadline-modal-title">Add a deadline</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="Close deadline form"><X size={20} /></button>
@@ -3750,7 +3732,6 @@ function CalendarView({
   return (
     <>
       <PageTitle
-        eyebrow="DEADLINE CONTROL"
         title="Calendar"
         text="Application, pre-enrolment, scholarship, and visa milestones in one place."
       >
@@ -3808,8 +3789,7 @@ function CalendarView({
         <aside className="panel agenda-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">NEXT 30 DAYS</p>
-              <h2>Agenda</h2>
+              <h2>Next 30 days</h2>
             </div>
           </div>
           {agenda.map((deadline) => {
@@ -3960,7 +3940,6 @@ function ReportsView({
   return (
     <>
       <PageTitle
-        eyebrow="WORKSPACE INTELLIGENCE"
         title="Reports"
         text="Live metrics calculated from your workspace records."
       >
@@ -4007,7 +3986,7 @@ function ReportsView({
           icon={<CalendarDays size={18} />}
           tone="orange"
           label="Deadlines met"
-          value={deadlinesMet === null ? "None due" : `${deadlinesMet}%`}
+          value={deadlinesMet === null ? "None" : `${deadlinesMet}%`}
           meta={
             deadlinesMet !== null
               ? `${completedDeadlines} completed`
@@ -4021,7 +4000,6 @@ function ReportsView({
         <div className="panel chart-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">TEAM OUTPUT</p>
               <h2>Students matched</h2>
             </div>
             <span className="outline-button">Last 6 months</span>
@@ -4054,7 +4032,6 @@ function ReportsView({
           </div>
         </div>
         <div className="panel health-panel">
-          <p className="eyebrow">STUDENT PIPELINE</p>
           <h2>Workspace health</h2>
           <div
             className={`health-ring ${health >= 75 ? "is-healthy" : health >= 45 ? "is-attention" : "is-starting"}`}
@@ -4105,7 +4082,6 @@ function TeamView({
   return (
     <>
       <PageTitle
-        eyebrow="WORKSPACE ACCESS"
         title="Team"
         text={`Members with access to ${workspace.name}.`}
       >
@@ -4339,7 +4315,6 @@ function SettingsView({
   return (
     <>
       <PageTitle
-        eyebrow="WORKSPACE SETTINGS"
         title="Settings"
         text="Manage your workspace details."
       />
@@ -4359,7 +4334,6 @@ function SettingsView({
         </nav>
         <div className="panel settings-card">
           <div className="settings-head">
-            <p className="eyebrow">{section.toUpperCase()}</p>
             <h2>
               {section === "Workspace profile"
                 ? "Consultancy details"
@@ -4468,9 +4442,8 @@ function SettingsView({
           {section === "Subscription" && (
             <div className="plan-card">
               <div>
-                <p className="eyebrow">CURRENT PLAN</p>
                 <h3>
-                  {draft.plan.charAt(0).toUpperCase() + draft.plan.slice(1)} ·
+                  {draft.plan.charAt(0).toUpperCase() + draft.plan.slice(1)} plan ·
                   30 profiles / month
                 </h3>
                 <p>Workspace billing plan</p>
@@ -4603,12 +4576,12 @@ function StudentDrawer({
             <section>
               <div className="section-title">
                 <div>
-                  <p className="eyebrow">ACADEMIC PROFILE</p>
-                  <h3>
+                  <h3>Academic profile</h3>
+                  <p className="section-status">
                     {academic.confirmedAt
                       ? "Confirmed by counsellor"
                       : "Not confirmed yet"}
-                  </h3>
+                  </p>
                 </div>
                 <button className="text-button" onClick={onReview}>
                   <ShieldCheck size={14} />
@@ -4657,7 +4630,6 @@ function StudentDrawer({
             <section>
               <div className="section-title">
                 <div>
-                  <p className="eyebrow">CREDIT MAPPING</p>
                   <h3>Subject areas</h3>
                 </div>
                 {student.confidence != null && (
@@ -4700,8 +4672,7 @@ function StudentDrawer({
             <section>
               <div className="section-title">
                 <div>
-                  <p className="eyebrow">DOCUMENTS</p>
-                  <h3>Uploaded files</h3>
+                  <h3>Documents</h3>
                 </div>
               </div>
               <div className="document-list">
@@ -4976,7 +4947,6 @@ function NewStudentWizard({
       >
         <header>
           <div>
-            <p className="eyebrow">NEW STUDENT INTAKE</p>
             <h2 id="wizard-title">
               {step === 1
                 ? "Start with the basics"

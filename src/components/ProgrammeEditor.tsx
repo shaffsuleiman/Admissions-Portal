@@ -192,7 +192,6 @@ export function ProgrammeEditor({
       <div className="wizard editor-modal" role="dialog" aria-modal="true" aria-labelledby="programme-editor-title">
         <header>
           <div>
-            <p className="eyebrow">AI PROGRAMME REVIEW</p>
             <h2 id="programme-editor-title">{programme ? `Review ${programme.programme}` : "Add a programme"}</h2>
           </div>
           <button onClick={onClose} aria-label="Close editor">
@@ -220,7 +219,7 @@ export function ProgrammeEditor({
             </button>
             {(evidence.length > 0 || draft?.notes) && (
               <div className="evidence">
-                <p className="eyebrow">AI EVIDENCE · {draft?.confidence ?? 0}% CONFIDENCE</p>
+                <p className="evidence-label">AI evidence · {draft?.confidence ?? 0}% confidence</p>
                 {evidence.map((item, index) => (
                   <blockquote key={`${item.field}-${index}`}>
                     <Quote size={12} />
@@ -235,8 +234,7 @@ export function ProgrammeEditor({
             )}
             <div className="verification-checklist">
               <div>
-                <p className="eyebrow">PUBLISH CHECKLIST</p>
-                <strong>{completedChecks} of {checklist.length} fields ready</strong>
+                                <strong>{completedChecks} of {checklist.length} fields ready to publish</strong>
               </div>
               <span className="verification-progress">
                 <i style={{ width: `${(completedChecks / checklist.length) * 100}%` }} />

@@ -234,7 +234,6 @@ export function ProfileReview({
       <div className="wizard review-modal" role="dialog" aria-modal="true" aria-labelledby="profile-review-title">
         <header>
           <div>
-            <p className="eyebrow">COUNSELLOR REVIEW</p>
             <h2 id="profile-review-title">Review {student.name.split(" ")[0]}’s academic profile</h2>
           </div>
           <button onClick={onClose} aria-label="Close review">
