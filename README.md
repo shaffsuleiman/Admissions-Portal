@@ -42,6 +42,22 @@ Admissions matching and application management for education consultancies. The 
 
 Without Supabase environment variables, the application remains usable in demo mode. With credentials configured, email/password, account creation, password reset, Google OAuth, cookie-based sessions, and sign-out use Supabase Auth.
 
+## Live AI research matching
+
+The Match centre has two deliberately separate paths:
+
+- **Saved catalogue** applies the deterministic matcher to AI-reviewed or human-verified programme rules already stored in Supabase.
+- **Live AI research (Beta)** sends only anonymized, confirmed academic facts to the OpenAI Responses API, requires the `web_search` tool, validates every cited rule against sources returned by that tool, and then applies the same deterministic matcher. Live results are provisional and are not saved as applications.
+
+Enable the optional live path with server-only variables:
+
+```text
+OPENAI_API_KEY=...
+OPENAI_MATCH_MODEL=gpt-5.5
+```
+
+The model is used as a current-source researcher and rule extractor, not as the final eligibility decision-maker. Keep the key server-side and never prefix it with `NEXT_PUBLIC_`.
+
 ## Backend model
 
 - `workspaces` and `workspace_members`: consultancy tenancy and roles
