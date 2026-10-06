@@ -41,7 +41,6 @@ export default function PricingPage() {
     <>
       <section className="site-page-head">
         <div className="site-shell">
-          <p className="eyebrow">PRICING</p>
           <h1>Plans that grow with your consultancy</h1>
           <p className="site-lede">
             Every plan includes the full programme catalogue, transcript reading and per-student credit conversion.
@@ -84,7 +83,6 @@ export default function PricingPage() {
 
       <section className="site-section site-section-tint">
         <div className="site-shell">
-          <p className="eyebrow">PAYMENT PLANS</p>
           <h2>Pay the way that suits your cash flow</h2>
           <div className="site-features site-features-3">
             {PAYMENT_OPTIONS.map((option) => (

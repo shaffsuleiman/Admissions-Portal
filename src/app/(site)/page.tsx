@@ -77,7 +77,6 @@ export default function HomePage() {
       <section className="site-hero">
         <div className="site-shell site-hero-inner">
           <div className="site-hero-copy">
-            <p className="eyebrow"><Sparkles size={13} /> ADMISSIONS INTELLIGENCE FOR ITALY</p>
             <h1>Turn every student profile into a <span>defensible shortlist.</span></h1>
             <p className="site-lede">
               Eligify reads your students&apos; documents, converts their credits fairly and checks them against{" "}
@@ -98,9 +97,8 @@ export default function HomePage() {
               <span><CheckCircle2 size={15} /> Human-reviewed</span>
             </div>
           </div>
-          <div className="site-product-wrap">
-            <div className="site-product-glow" aria-hidden="true" />
-            <div className="site-product-frame">
+          <div className="site-product-wrap" role="img" aria-label="Eligify workspace overview showing students, programme matches, deadlines and applications">
+            <div className="site-product-frame" aria-hidden="true">
               <div className="site-product-body">
                 <aside className="site-product-nav" aria-hidden="true">
                   <div className="site-preview-brand"><i /><i /><i /></div>
@@ -117,7 +115,7 @@ export default function HomePage() {
                   </div>
                   <div className="site-product-main">
                     <div className="site-preview-welcome">
-                      <Image src={milanPhoto} alt="" sizes="480px" />
+                      <Image src={milanPhoto} alt="" sizes="480px" loading="eager" placeholder="blur" />
                       <div>
                         <small>MONDAY, 5 OCTOBER</small>
                         <strong>Good morning, Ayesha.</strong>
@@ -147,10 +145,6 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <div className="site-floating-card site-floating-card-top" aria-hidden="true">
-              <span><ScanText size={14} /></span>
-              <div><strong>Profile ready to review</strong><small>22 subjects identified</small></div>
-            </div>
           </div>
         </div>
       </section>
@@ -158,7 +152,6 @@ export default function HomePage() {
       <section className="site-section" id="how-it-works">
         <div className="site-shell">
           <div className="site-section-head">
-            <p className="eyebrow">HOW IT WORKS</p>
             <h2>From documents to a shortlist in one sitting</h2>
             <p>A repeatable, reviewable workflow your whole counselling team can trust.</p>
           </div>
@@ -177,7 +170,6 @@ export default function HomePage() {
       <section className="site-section site-section-tint">
         <div className="site-shell">
           <div className="site-section-head">
-            <p className="eyebrow">THE PLATFORM</p>
             <h2>Everything a counsellor needs to advise with confidence</h2>
             <p>One workspace for eligibility, programme research, deadlines and client-ready reporting.</p>
           </div>
@@ -202,7 +194,6 @@ export default function HomePage() {
             <figcaption>{PHOTOS.milan}</figcaption>
           </figure>
           <div>
-            <p className="eyebrow">WHY CONSULTANCIES SWITCH</p>
             <h2>Stop checking programme pages one by one</h2>
             <p>
               Entry rules for Italian programmes are spread across hundreds of university websites, each with its own
@@ -225,7 +216,7 @@ export default function HomePage() {
         <div className="site-shell site-cta-inner">
           <div>
             <h2>See it with your own students</h2>
-            <p>Book a 30 minute call and we will run a real profile through Eligify with you.</p>
+            <p>Book a 30-minute call and we will run a real profile through Eligify with you.</p>
           </div>
           <div className="site-actions">
             <Link href="/book" className="primary-button site-button-lg site-button-light">

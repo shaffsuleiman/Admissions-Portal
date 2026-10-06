@@ -10,7 +10,7 @@ const initial: EnquiryState = { status: "idle" };
 function FieldError({ state, name }: { state: EnquiryState; name: string }) {
   const message = state.fieldErrors?.[name];
   return message ? (
-    <span className="site-field-error" id={`${name}-error`}>
+    <span className="site-field-error" id={`${name}-error`} role="alert">
       {message}
     </span>
   ) : null;
@@ -57,12 +57,12 @@ export function ContactForm() {
       <div className="site-form-row">
         <label>
           Your name
-          <input name="fullName" defaultValue={state.values?.fullName} autoComplete="name" required aria-invalid={!!state.fieldErrors?.fullName} aria-describedby={describedBy(state, "fullName")} />
+          <input name="fullName" defaultValue={state.values?.fullName} autoComplete="name" maxLength={120} required aria-invalid={!!state.fieldErrors?.fullName} aria-describedby={describedBy(state, "fullName")} />
           <FieldError state={state} name="fullName" />
         </label>
         <label>
           Work email
-          <input name="email" defaultValue={state.values?.email} type="email" autoComplete="email" required aria-invalid={!!state.fieldErrors?.email} aria-describedby={describedBy(state, "email")} />
+          <input name="email" defaultValue={state.values?.email} type="email" autoComplete="email" maxLength={254} required aria-invalid={!!state.fieldErrors?.email} aria-describedby={describedBy(state, "email")} />
           <FieldError state={state} name="email" />
         </label>
       </div>
@@ -71,7 +71,7 @@ export function ContactForm() {
           <span>
             Consultancy <span className="site-optional">optional</span>
           </span>
-          <input name="consultancyName" defaultValue={state.values?.consultancyName} autoComplete="organization" />
+          <input name="consultancyName" defaultValue={state.values?.consultancyName} autoComplete="organization" maxLength={160} />
         </label>
         <label>
           Topic
@@ -86,7 +86,7 @@ export function ContactForm() {
       </div>
       <label>
         Message
-        <textarea name="message" rows={6} defaultValue={state.values?.message} required aria-invalid={!!state.fieldErrors?.message} aria-describedby={describedBy(state, "message")} />
+        <textarea name="message" rows={6} defaultValue={state.values?.message} maxLength={4000} required aria-invalid={!!state.fieldErrors?.message} aria-describedby={describedBy(state, "message")} />
         <FieldError state={state} name="message" />
       </label>
       {state.message ? (
@@ -137,26 +137,26 @@ export function ConsultationForm({ plan }: { plan?: string }) {
       <div className="site-form-row">
         <label>
           Your name
-          <input name="fullName" defaultValue={state.values?.fullName} autoComplete="name" required aria-invalid={!!state.fieldErrors?.fullName} aria-describedby={describedBy(state, "fullName")} />
+          <input name="fullName" defaultValue={state.values?.fullName} autoComplete="name" maxLength={120} required aria-invalid={!!state.fieldErrors?.fullName} aria-describedby={describedBy(state, "fullName")} />
           <FieldError state={state} name="fullName" />
         </label>
         <label>
           Work email
-          <input name="email" defaultValue={state.values?.email} type="email" autoComplete="email" required aria-invalid={!!state.fieldErrors?.email} aria-describedby={describedBy(state, "email")} />
+          <input name="email" defaultValue={state.values?.email} type="email" autoComplete="email" maxLength={254} required aria-invalid={!!state.fieldErrors?.email} aria-describedby={describedBy(state, "email")} />
           <FieldError state={state} name="email" />
         </label>
       </div>
       <div className="site-form-row">
         <label>
           Consultancy
-          <input name="consultancyName" defaultValue={state.values?.consultancyName} autoComplete="organization" required aria-invalid={!!state.fieldErrors?.consultancyName} aria-describedby={describedBy(state, "consultancyName")} />
+          <input name="consultancyName" defaultValue={state.values?.consultancyName} autoComplete="organization" maxLength={160} required aria-invalid={!!state.fieldErrors?.consultancyName} aria-describedby={describedBy(state, "consultancyName")} />
           <FieldError state={state} name="consultancyName" />
         </label>
         <label>
           <span>
             Phone or WhatsApp <span className="site-optional">optional</span>
           </span>
-          <input name="phone" defaultValue={state.values?.phone} type="tel" autoComplete="tel" />
+          <input name="phone" defaultValue={state.values?.phone} type="tel" autoComplete="tel" maxLength={40} />
         </label>
       </div>
       <fieldset className="site-choice" aria-describedby={describedBy(state, "teamSize")}>
@@ -197,6 +197,7 @@ export function ConsultationForm({ plan }: { plan?: string }) {
         <textarea
           name="message"
           rows={4}
+          maxLength={4000}
           defaultValue={
             state.values?.message ??
             (plan ? `I'm interested in the ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan.` : "")

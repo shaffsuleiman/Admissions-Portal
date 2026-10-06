@@ -19,7 +19,6 @@ export default async function BookPage({ searchParams }: PageProps<"/book">) {
       <section className="site-page-head site-book-head">
         <div className="site-shell site-book-head-inner">
           <div>
-            <p className="eyebrow">BOOK A CONSULTATION</p>
             <h1>See what Eligify changes for your team.</h1>
             <p className="site-lede">
               Bring a real student profile and we will show you the complete journey from documents to a defensible shortlist.
@@ -42,7 +41,6 @@ export default async function BookPage({ searchParams }: PageProps<"/book">) {
         <div className="site-shell site-form-layout site-book-layout">
           <div className="site-form-card">
             <div className="site-form-intro">
-              <p className="eyebrow">REQUEST A TIME</p>
               <h2>Choose what works for you</h2>
               <p>Tell us who is joining and your preferred time. We will confirm the meeting by email.</p>
             </div>

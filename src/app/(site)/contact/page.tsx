@@ -14,7 +14,6 @@ export default function ContactPage() {
       <section className="site-page-head site-contact-head">
         <div className="site-shell site-contact-head-inner">
           <div>
-            <p className="eyebrow">CONTACT</p>
             <h1>Let&apos;s find the right next step.</h1>
             <p className="site-lede">Tell us what you are working through and the right person on our team will reply within one working day.</p>
           </div>
@@ -29,7 +28,6 @@ export default function ContactPage() {
         <div className="site-shell site-form-layout site-contact-layout">
           <div className="site-form-card">
             <div className="site-form-intro">
-              <p className="eyebrow">SEND A MESSAGE</p>
               <h2>How can we help?</h2>
               <p>Share a little context so we can give you a useful answer the first time.</p>
             </div>

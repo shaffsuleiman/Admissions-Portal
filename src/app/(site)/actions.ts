@@ -30,12 +30,12 @@ function submitted(formData: FormData) {
 
 async function save(row: Record<string, string | null>, values: Record<string, string>): Promise<EnquiryState> {
   if (!isSupabaseConfigured()) {
-    return { status: "error", message: "We could not send this right now. Please try again later.", values };
+    return { status: "error", message: "We could not send this. Your details are still here, so you can try again later.", values };
   }
   const supabase = await createClient();
   const { error } = await supabase.from("website_enquiries").insert(row);
   if (error) {
-    return { status: "error", message: "Something went wrong while sending. Please try again in a minute.", values };
+    return { status: "error", message: "We could not send this. Your details are still here—try again in a minute.", values };
   }
   return { status: "sent" };
 }

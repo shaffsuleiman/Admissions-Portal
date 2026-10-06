@@ -34,7 +34,6 @@ export default function AboutPage() {
       <section className="site-page-head site-about-head">
         <div className="site-shell site-about-head-grid">
           <div>
-            <p className="eyebrow">ABOUT ELIGIFY</p>
             <h1>Fair, checkable advice for every student going to Italy</h1>
             <p className="site-lede">
               Eligify is admissions software for study-abroad consultancies. We started with Italy because its
@@ -87,7 +86,6 @@ export default function AboutPage() {
 
       <section className="site-section site-section-tint">
         <div className="site-shell">
-          <p className="eyebrow">HOW WE WORK</p>
           <h2>Three principles behind every match</h2>
           <div className="site-features site-features-3">
             {PRINCIPLES.map(({ icon: Icon, title, body }) => (

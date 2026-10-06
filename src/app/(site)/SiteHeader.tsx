@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
 const LINKS = [
@@ -34,6 +34,15 @@ export function SiteHeader() {
   // The menu closes on navigation because it only stays open for the page it was opened on.
   const open = openPath === pathname;
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPath(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
+
   return (
     <header className="site-header">
       <div className="site-shell site-header-inner">
@@ -45,6 +54,7 @@ export function SiteHeader() {
           className="site-menu-button"
           aria-expanded={open}
           aria-controls="site-nav"
+          aria-label={open ? "Close menu" : "Open menu"}
           onClick={() => setOpenPath(open ? null : pathname)}
         >
           {open ? <X size={20} /> : <Menu size={20} />}
