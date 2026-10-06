@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -12,7 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import milanPhoto from "../../../public/images/campus/milan.jpg";
-import { PHOTOS } from "./content";
+import { CATALOGUE, PHOTOS } from "./content";
 
 const STEPS = [
   {
@@ -65,98 +66,116 @@ const FEATURES = [
 export default function HomePage() {
   return (
     <>
-      <section className="archive-hero" aria-labelledby="archive-hero-title">
-        <div className="archive-hero-frame">
-          <div className="archive-intro">
-            <p className="archive-meta">ACCESSION RECORD <span>A/2026/0173</span></p>
-            <h1 id="archive-hero-title">Turn every student profile into a defensible shortlist.</h1>
-            <p className="archive-summary">
-              Read academic documents, convert credits fairly and check every recommendation against official programme requirements.
+      <section className="evidence-hero" aria-labelledby="evidence-hero-title">
+        <div className="evidence-hero-inner">
+          <div className="evidence-copy">
+            <p className="evidence-kicker">Evidence file · 2026/27 intake</p>
+            <h1 id="evidence-hero-title">Turn every student profile into a defensible shortlist.</h1>
+            <p className="evidence-summary">
+              Eligify reads academic documents, converts credits for each student and checks them against official
+              programme requirements, so every recommendation comes with its reasons.
             </p>
-            <div className="archive-actions">
-              <Link href="/book" className="primary-button archive-primary-action">
+            <div className="evidence-actions">
+              <Link href="/book" className="primary-button evidence-primary">
                 Book a consultation <ArrowRight size={17} />
               </Link>
-              <Link href="/pricing" className="archive-secondary-action">
+              <Link href="/pricing" className="evidence-secondary">
                 See pricing <ArrowRight size={15} />
               </Link>
             </div>
-
-            <div className="archive-evidence-footer">
-              <dl className="archive-source-index" aria-label="Evidence status">
-                <div><dt>Official sources</dt><dd>Verified</dd></div>
-                <div><dt>Transcripts</dt><dd>Structured</dd></div>
-                <div><dt>Qualifications</dt><dd>Standardised</dd></div>
-                <div><dt>Programme data</dt><dd>Matched</dd></div>
-                <div><dt>Counsellor review</dt><dd>Required</dd></div>
-              </dl>
-
-              <div className="archive-seal" aria-label="A higher standard of evidence">
-                <span>ARCHIVE OF EVIDENCE</span>
-                <strong>ELIGIFY</strong>
-                <p>A higher standard<br />of evidence.</p>
+            <dl className="evidence-proof">
+              <div>
+                <dt>{CATALOGUE.programmes}</dt>
+                <dd>English-taught programmes</dd>
               </div>
-            </div>
+              <div>
+                <dt>{CATALOGUE.universities}</dt>
+                <dd>Italian universities</dd>
+              </div>
+              <div>
+                <dt>100%</dt>
+                <dd>of matches linked to an official page</dd>
+              </div>
+            </dl>
           </div>
 
-          <div className="archive-visual">
-            <Image
-              className="archive-assembly"
-              src="/images/site/archive-assembly.png"
-              alt=""
-              width={2048}
-              height={1555}
-              priority
-              sizes="(max-width: 1079px) 0px, 64vw"
-            />
-
-            <ol className="archive-records" aria-label="How a profile becomes a verified shortlist">
-              <li className="archive-record archive-record-student">
-                <span className="archive-record-number">01</span>
-                <span className="archive-record-icon"><Users size={18} /></span>
-                <div><small>Student profile</small><strong>Samira Khan</strong></div>
-                <code>PROFILE / A2026-0173</code>
-              </li>
-              <li className="archive-record archive-record-transcript">
-                <span className="archive-record-number">02</span>
-                <span className="archive-record-icon"><ScanText size={18} /></span>
-                <div><strong>Transcript processed</strong><small>22 subjects identified</small></div>
-                <code>TRANSCRIPT / T024-4510</code>
-              </li>
-              <li className="archive-record archive-record-credits">
-                <span className="archive-record-number">03</span>
-                <span className="archive-record-icon"><Scale size={18} /></span>
-                <div><small>Converted credits</small><strong>128 ECTS</strong></div>
-                <code>CREDITS / C2026-0087</code>
-              </li>
-              <li className="archive-record archive-record-matches">
-                <span className="archive-record-number">04</span>
-                <span className="archive-record-icon"><Sparkles size={18} /></span>
-                <div><strong>34 programme matches</strong></div>
-                <code>MATCHING / M2026-1204</code>
-              </li>
-              <li className="archive-record archive-record-match">
-                <span className="archive-record-number">05</span>
-                <div className="archive-match-copy">
-                  <small>Top programme match</small>
-                  <strong>MSc Computer Science</strong>
-                  <span>University of Milan</span>
+          <figure className="evidence-file">
+            <ol className="evidence-records" aria-label="Example: how one student profile becomes a shortlist">
+              <li className="evidence-record" style={{ "--i": 0 } as CSSProperties}>
+                <span className="evidence-index" aria-hidden="true">01</span>
+                <div className="evidence-card">
+                  <span className="evidence-icon"><Users size={17} /></span>
+                  <div className="evidence-text">
+                    <small>Student profile</small>
+                    <strong>Samira Khan</strong>
+                  </div>
+                  <code>BSc Computer Science · 4 years</code>
                 </div>
-                <span className="archive-match-score">98% match</span>
-                <dl>
-                  <div><dt>Programme code</dt><dd>M-PSC-1023</dd></div>
-                  <div><dt>Degree</dt><dd>MSc</dd></div>
-                  <div><dt>Location</dt><dd>Milan, Italy</dd></div>
-                </dl>
               </li>
-              <li className="archive-record archive-record-source">
-                <span className="archive-record-number">06</span>
-                <span className="archive-record-icon is-verified"><BadgeCheck size={19} /></span>
-                <div><strong>Official source verified</strong></div>
-                <code>VERIFICATION / V2026-6621</code>
+              <li className="evidence-record" style={{ "--i": 1 } as CSSProperties}>
+                <span className="evidence-index" aria-hidden="true">02</span>
+                <div className="evidence-card">
+                  <span className="evidence-icon"><ScanText size={17} /></span>
+                  <div className="evidence-text">
+                    <small>Transcript read</small>
+                    <strong>133 credit hours</strong>
+                  </div>
+                  <code>22 subjects · CGPA 3.4 of 4</code>
+                </div>
+              </li>
+              <li className="evidence-record" style={{ "--i": 2 } as CSSProperties}>
+                <span className="evidence-index" aria-hidden="true">03</span>
+                <div className="evidence-card">
+                  <span className="evidence-icon"><Scale size={17} /></span>
+                  <div className="evidence-text">
+                    <small>Credits converted</small>
+                    <strong>240 ECTS</strong>
+                  </div>
+                  <code>240 ÷ 133 = 1.80 per credit hour</code>
+                </div>
+              </li>
+              <li className="evidence-record" style={{ "--i": 3 } as CSSProperties}>
+                <span className="evidence-index" aria-hidden="true">04</span>
+                <div className="evidence-card">
+                  <span className="evidence-icon"><Sparkles size={17} /></span>
+                  <div className="evidence-text">
+                    <small>Programmes checked</small>
+                    <strong>18 exact · 11 close</strong>
+                  </div>
+                  <code>Each with a written reason</code>
+                </div>
+              </li>
+              <li className="evidence-record evidence-record-match" style={{ "--i": 4 } as CSSProperties}>
+                <span className="evidence-index" aria-hidden="true">05</span>
+                <div className="evidence-card">
+                  <div className="evidence-match-head">
+                    <div className="evidence-text">
+                      <small>Top programme match</small>
+                      <strong>MSc Computer Science</strong>
+                      <span>University of Milan</span>
+                    </div>
+                    <span className="evidence-pill">Exact match</span>
+                  </div>
+                  <ul className="evidence-checks">
+                    <li><BadgeCheck size={15} /> Credits <b>240 of 180 ECTS</b></li>
+                    <li><BadgeCheck size={15} /> English <b>IELTS 6.5 of 6.0</b></li>
+                    <li><BadgeCheck size={15} /> Background <b>Computer Science</b></li>
+                  </ul>
+                  <p className="evidence-source">
+                    <Link2 size={14} /> Official programme page attached for counsellor review
+                  </p>
+                  <Image
+                    className="evidence-photo"
+                    src={milanPhoto}
+                    alt=""
+                    sizes="120px"
+                    placeholder="blur"
+                  />
+                </div>
               </li>
             </ol>
-          </div>
+            <figcaption>Example record. {PHOTOS.milan}</figcaption>
+          </figure>
         </div>
       </section>
 
