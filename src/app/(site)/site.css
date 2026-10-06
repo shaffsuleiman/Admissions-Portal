@@ -3416,9 +3416,6 @@
 
 .site-section {
   background-color: var(--archive-paper);
-  background-image: url("/images/site/paper-texture.png");
-  background-repeat: repeat;
-  background-size: 172px 116px;
 }
 
 .site-section:first-of-type {
@@ -3470,9 +3467,6 @@
 
 .site-page-head {
   background-color: var(--archive-paper);
-  background-image: url("/images/site/paper-texture.png");
-  background-repeat: repeat;
-  background-size: 172px 116px;
   border-color: var(--archive-rule);
 }
 
