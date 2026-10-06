@@ -2439,13 +2439,13 @@ a:focus-visible {
 }
 .month-grid .today > span {
   background: var(--blue);
-  border-radius: 4px;
+  border-radius: 8px;
   color: white;
   font-weight: 800;
 }
 .event {
   border: 1px solid;
-  border-radius: 4px;
+  border-radius: 7px;
   display: block;
   font-size: 11px;
   margin-top: 5px;
@@ -6137,6 +6137,9 @@ body.report-open {
   --archive-amber: #a75e2c;
   --archive-rule: #d9ccc6;
   --archive-rule-soft: #e7ddd8;
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-chip: 7px;
   --ink: #39252c;
   --navy: var(--archive-ink);
   --muted: #6f5c63;
@@ -6184,7 +6187,7 @@ html {
 
 .brand-symbol {
   background: var(--archive-oxblood);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   box-shadow: 0 8px 18px -12px #270b1699;
 }
 
@@ -6207,7 +6210,7 @@ html {
 }
 
 .product-shell .nav-group button {
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   color: #4d353e;
   font-size: 13px;
   font-weight: 600;
@@ -6228,7 +6231,7 @@ html {
 .product-shell .nav-group button b,
 .product-shell .nav-group button em,
 .product-shell .nav-group button small {
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .product-shell .workspace-card,
@@ -6236,30 +6239,30 @@ html {
 .product-shell .user-card {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   box-shadow: none;
 }
 
 .product-shell .usage-track {
   background: #e7ddd8;
-  border-radius: 2px;
+  border-radius: 999px;
 }
 
 .product-shell .usage-track span {
   background: var(--archive-raspberry);
-  border-radius: 2px;
+  border-radius: 999px;
 }
 
 .product-shell .logout-button {
   background: transparent;
   border: 1px solid var(--archive-rule);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   box-shadow: none;
 }
 
 .product-shell .logout-button svg {
   background: #f1e3e8;
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
 }
 
 .product-shell .topbar {
@@ -6271,7 +6274,7 @@ html {
 .product-shell .help-button {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .product-shell .global-search:focus-within {
@@ -6333,7 +6336,7 @@ html {
 .product-shell .empty-state.panel {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   box-shadow: none;
 }
 
@@ -6341,21 +6344,21 @@ html {
 .product-shell .database-banner {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   box-shadow: none;
 }
 
 .product-shell .live-research-intro {
   background: #f2eef9;
   border: 1px solid #ddd3f0;
-  border-radius: 6px;
+  border-radius: var(--radius-card);
 }
 
 /* Overview stats: one ruled ledger instead of four icon cards */
 .product-shell .metric-grid {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   gap: 0;
   overflow: hidden;
 }
@@ -6429,7 +6432,7 @@ html {
 .product-shell .welcome-hero {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   box-shadow: none;
 }
 
@@ -6457,16 +6460,16 @@ html {
   backdrop-filter: none;
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .product-shell .impact-card {
   background: var(--archive-oxblood);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
 }
 
 .product-shell .impact-card button {
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   color: var(--archive-oxblood);
 }
 
@@ -6475,7 +6478,7 @@ html {
 .login-button {
   background: var(--archive-raspberry);
   border: 1px solid var(--archive-raspberry);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   box-shadow: 0 14px 26px -18px #6d163c;
   color: #fff;
 }
@@ -6491,7 +6494,7 @@ html {
 .sso-button {
   background: var(--archive-surface);
   border: 1px solid var(--archive-rule);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   box-shadow: none;
   color: var(--archive-ink);
 }
@@ -6512,7 +6515,7 @@ html {
 .product-shell .search-box,
 .product-shell .input-wrap {
   border-color: #d6c8c2;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .product-shell .search-box,
@@ -6537,11 +6540,11 @@ html {
 
 .product-shell .segmented {
   background: var(--archive-paper-deep);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .product-shell .segmented button {
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
   color: #6f5c63;
 }
 
@@ -6552,7 +6555,7 @@ html {
 }
 
 .product-shell .status {
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 /* Tables */
@@ -6579,20 +6582,20 @@ html {
 
 .product-shell .match-card img,
 .product-shell .school-logo {
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 /* Applications and calendar */
 .product-shell .kanban-column {
   background: var(--archive-paper-deep);
   border: 1px solid var(--archive-rule-soft);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
 }
 
 .product-shell .application-card {
   background: var(--archive-surface);
   border-color: var(--archive-rule);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   box-shadow: none;
 }
 
@@ -6610,7 +6613,7 @@ html {
 .wizard,
 .product-shell .tour-card {
   background: var(--archive-paper);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
 }
 
 .student-drawer {
@@ -6620,12 +6623,12 @@ html {
 
 .toast {
   background: var(--archive-oxblood);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
 }
 
 /* Settings */
 .product-shell .settings-layout nav button {
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .product-shell .settings-layout nav button.active {
@@ -6680,7 +6683,7 @@ html {
 .auth-box .input-wrap {
   background: #fffdfb;
   border: 1px solid #d6c8c2;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .auth-box .input-wrap:focus-within {

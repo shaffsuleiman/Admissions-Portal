@@ -3341,7 +3341,7 @@
 
 .site .brand-symbol {
   background: var(--archive-oxblood);
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
   box-shadow: 0 8px 18px -12px #270b1699;
   height: 34px;
   width: 34px;
@@ -3368,7 +3368,7 @@
 }
 
 .site-nav a {
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
   color: #4d353e;
   font-size: 0.78rem;
   letter-spacing: -0.005em;
@@ -3387,7 +3387,7 @@
 .site .primary-button {
   background: var(--archive-raspberry);
   border-color: var(--archive-raspberry);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   box-shadow: 0 14px 26px -18px #6d163c;
   color: white;
 }
@@ -3402,7 +3402,7 @@
 .site-menu-button {
   background: transparent;
   border-color: #cdbfba;
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
 }
 
 .archive-section-heading {
@@ -3451,7 +3451,7 @@
 .site-feature-icon {
   background: transparent;
   border: 1px solid #bdaeb0;
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
   color: var(--archive-raspberry);
 }
 
@@ -3479,7 +3479,7 @@
 .site-contact-promise {
   background: #f8f4f1;
   border-color: var(--archive-rule);
-  border-radius: 4px;
+  border-radius: var(--radius-card);
   box-shadow: 0 18px 42px -36px #270b167a;
 }
 
@@ -3489,13 +3489,13 @@
 }
 
 .site-plan.is-highlight::before {
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
 }
 
 .site-plan-badge,
 .site-pill,
 .site-status {
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
 }
 
 .site-form input:not([type="radio"]),
@@ -3504,7 +3504,7 @@
 .site-choice span {
   background: #fffdfb;
   border-color: #cfc2bd;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 }
 
 .site-form input:not([type="radio"]):focus,
@@ -3803,7 +3803,7 @@
 
 .evidence-records::before {
   background: linear-gradient(180deg, #5a2a35 0%, var(--archive-oxblood) 55%, #3b1a22 100%);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   bottom: -22px;
   box-shadow: 0 22px 40px -26px #270b16, inset -6px 0 10px -6px #00000059;
   content: "";
@@ -3843,7 +3843,7 @@
   align-items: center;
   background: #fbf8f4;
   border: 1px solid #dccfc9;
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   box-shadow: inset 0 1px 0 #fff, 0 14px 28px -22px #270b1680;
   display: grid;
   gap: 14px;
@@ -3855,7 +3855,7 @@
 
 .evidence-card::after {
   background: #a895df;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 6px 6px 0;
   bottom: 12px;
   content: "";
   position: absolute;
@@ -3867,7 +3867,7 @@
 .evidence-icon {
   align-items: center;
   border: 1px solid #cdbeba;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   color: var(--archive-raspberry);
   display: flex;
   height: 36px;
@@ -4001,7 +4001,7 @@
 }
 
 .evidence-photo {
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   filter: saturate(0.8) contrast(1.02);
   grid-area: photo;
   height: 112px;
