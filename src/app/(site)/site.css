@@ -3192,7 +3192,6 @@
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  padding: 0;
 }
 
 .site .site-cta-band h2 {
@@ -3237,10 +3236,6 @@
 
   .site-cta-band {
     padding: 54px 0;
-  }
-
-  .site-cta-inner {
-    padding: 0;
   }
 
   .site-nav {
@@ -4155,5 +4150,41 @@
 @media (max-width: 980px) {
   .evidence-file {
     padding-top: 26px;
+  }
+}
+
+/* Call-to-action band on phones: keep the page gutter and stack the actions. */
+@media (max-width: 719px) {
+  .site-cta-band {
+    padding: 48px 0 52px;
+  }
+
+  .site .site-cta-band h2 {
+    font-size: 1.9rem;
+    margin-bottom: 10px;
+  }
+
+  .site-cta-band .site-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 26px;
+  }
+
+  .site .site-cta-band .site-button-light {
+    width: 100%;
+  }
+
+  .site-cta-band .site-text-link-light {
+    justify-content: center;
+    padding: 10px 0;
+  }
+}
+
+/* One page gutter on phones, aligned with the header logo. */
+@media (max-width: 719px) {
+  .site-shell,
+  .evidence-hero-inner {
+    padding-inline: 24px;
   }
 }
