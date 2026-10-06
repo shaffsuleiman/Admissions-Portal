@@ -74,6 +74,7 @@ import {
   CircleHelp,
   Clock3,
   Download,
+  Earth,
   ExternalLink,
   Eye,
   EyeOff,
@@ -91,12 +92,15 @@ import {
   MapPin,
   Menu,
   MoreHorizontal,
+  PartyPopper,
+  Plane,
   Plus,
   Search,
   Settings,
   ShieldCheck,
   Sparkles,
   Trash2,
+  TrendingUp,
   UploadCloud,
   UserPlus,
   Users,
@@ -208,10 +212,10 @@ function Brand({ light = false }: { light?: boolean }) {
   );
 }
 
-const campusPhotos: { match: RegExp; photo: StaticImageData; place: string }[] =
+const campusPhotos: { match: RegExp; photo: StaticImageData; place: string; credit?: string }[] =
   [
-    { match: /padua|padova/i, photo: paduaPhoto, place: "Palazzo Bo, Padua" },
-    { match: /bologna/i, photo: bolognaPhoto, place: "Archiginnasio, Bologna" },
+    { match: /padua|padova/i, photo: paduaPhoto, place: "Palazzo Bo, Padua", credit: "Didier Descouens, CC BY-SA 4.0" },
+    { match: /bologna/i, photo: bolognaPhoto, place: "Archiginnasio, Bologna", credit: "Wwikiwalter, CC BY-SA 4.0" },
     {
       match: /torino|turin/i,
       photo: turinPhoto,
@@ -228,6 +232,7 @@ const campusPhotos: { match: RegExp; photo: StaticImageData; place: string }[] =
       match: /venice|venezia|foscari/i,
       photo: venicePhoto,
       place: "Ca’ Foscari, Venice",
+      credit: "Freddo213, CC BY-SA 4.0",
     },
   ];
 
@@ -1173,6 +1178,18 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
           ))}
         </nav>
         <div className="sidebar-bottom">
+          {workspace.plan !== "enterprise" && (
+            <div className="grow-card">
+              <span className="grow-globe" aria-hidden="true">
+                <Earth size={26} />
+              </span>
+              <strong>Expand global opportunities</strong>
+              <small>Guide more students to incredible futures.</small>
+              <button onClick={() => openSettings("Subscription")}>
+                Upgrade plan <ArrowRight size={13} />
+              </button>
+            </div>
+          )}
           <div className="usage-card">
             <div>
               <span>MONTHLY PROFILES</span>
@@ -1683,28 +1700,42 @@ function Overview({
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  // A different campus greets the team each day.
+  const capitalisedName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : "";
+  // A different campus greets the team each day; the circles use two other campuses.
   const heroCampus = campusPhotos[new Date().getDate() % campusPhotos.length];
+  const orbitCampuses = campusPhotos.filter((campus) => campus !== heroCampus && !campus.credit).slice(0, 2);
+  const [placeName, placeCity] = heroCampus.place.split(", ");
+  const activeStudents = students.filter((student) => student.status !== "archived");
+  const eligible = matches.filter((match) => match.status === "Eligible");
+  const overdue = deadlines.filter(
+    (deadline) => !deadline.completedAt && daysUntil(deadline.dueAt) < 0,
+  ).length;
+  const recentStudents = [...students]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 3);
+  const reviewRows = attentionStudents.length ? attentionStudents : recentStudents;
+  const newThisMonth = (timestamps: string[]) => countSince(timestamps, 30);
   return (
     <>
-      <header className="welcome-hero">
-        <Image
-          src={heroCampus.photo}
-          alt={heroCampus.place}
-          className="welcome-hero-photo"
-          fill
-          preload
-          sizes="(max-width: 820px) 100vw, 1200px"
-        />
-        <div className="welcome-hero-copy">
+      <header className="lively-hero">
+        <div className="lively-hero-copy">
+          <p className="lively-dateline">
+            <time>{dateLabel}</time>
+          </p>
           <h1>
             {greeting}
-            {firstName ? `, ${firstName}` : ""}.
+            {capitalisedName ? (
+              <>
+                , <em>{capitalisedName}</em>
+              </>
+            ) : null}
+            .
           </h1>
           <p>
-            <time>{dateLabel}</time> · Here’s what needs your attention across your workspace.
+            Here’s what needs your attention across your workspace today, and the next steps to
+            keep your students moving forward.
           </p>
-          <div className="page-actions">
+          <div className="lively-actions">
             <button
               className="secondary-button"
               onClick={() => exportStudents(students, onNotify)}
@@ -1712,137 +1743,222 @@ function Overview({
               <Download size={16} /> Export
             </button>
             <button className="primary-button" onClick={onNew}>
-              <Plus size={17} /> New student
+              <Plus size={17} /> Add new student
             </button>
           </div>
         </div>
-        <span className="welcome-hero-place">
-          <MapPin size={13} /> {heroCampus.place}
+        <div className="lively-collage" aria-hidden="true">
+          <div className="lively-collage-main">
+            <Image
+              src={heroCampus.photo}
+              alt=""
+              fill
+              preload
+              placeholder="blur"
+              sizes="(max-width: 820px) 100vw, 640px"
+            />
+          </div>
+          {orbitCampuses.map((campus, index) => (
+            <span key={campus.place} className={`lively-orbit lively-orbit-${index + 1}`}>
+              <Image src={campus.photo} alt="" fill placeholder="blur" sizes="150px" />
+            </span>
+          ))}
+          <p className="lively-note">
+            Students today,
+            <br />
+            global citizens tomorrow.
+          </p>
+          <svg className="lively-flight" viewBox="0 0 170 80" fill="none">
+            <path d="M4 74 C 54 72, 98 52, 160 12" />
+          </svg>
+          <Plane className="lively-plane" size={20} />
+        </div>
+        <span className="lively-place">
+          <MapPin size={15} />
+          <span>
+            <b>{placeName}</b>
+            <small>{placeCity ? `${placeCity}, Italy` : "Italy"}</small>
+          </span>
         </span>
+        {heroCampus.credit ? <small className="lively-credit">Photo: {heroCampus.credit}</small> : null}
       </header>
-      <section className="metric-grid">
-        <Metric
-          icon={<Users size={18} />}
-          tone="blue"
+
+      <section className="live-metrics" aria-label="Workspace at a glance">
+        <LiveMetric
+          icon={<Users size={20} />}
+          tone="lavender"
           label="Active students"
-          value={String(
-            students.filter((student) => student.status !== "archived").length,
-          )}
-          meta={`${attentionStudents.length} need review`}
+          value={activeStudents.length}
+          added={newThisMonth(activeStudents.map((student) => student.createdAt))}
+          spark={dailyTotals(activeStudents.map((student) => student.createdAt), 30)}
+          meta={`${attentionStudents.length} ${attentionStudents.length === 1 ? "needs" : "need"} review`}
         />
-        <Metric
-          icon={<Sparkles size={18} />}
-          tone="violet"
+        <LiveMetric
+          icon={<BookOpen size={20} />}
+          tone="peach"
           label="Eligible matches"
-          value={String(matches.filter((match) => match.status === "Eligible").length)}
+          value={eligible.length}
+          added={newThisMonth(eligible.map((match) => match.generatedAt))}
+          spark={dailyTotals(eligible.map((match) => match.generatedAt), 30)}
           meta={`${plural(matches.length, "programme")} checked`}
         />
-        <Metric
-          icon={<CalendarDays size={18} />}
-          tone="orange"
+        <LiveMetric
+          icon={<CalendarDays size={20} />}
+          tone="rose"
           label="Due this week"
-          value={String(dueThisWeek)}
+          value={dueThisWeek}
+          chip={
+            overdue
+              ? { text: `${overdue} overdue`, tone: "down" }
+              : { text: "On track", tone: "up" }
+          }
+          spark={upcomingPerDay(openDeadlines.map((deadline) => deadline.dueAt), 14).reduce<number[]>(
+            (running, count) => [...running, (running.at(-1) ?? 0) + count],
+            [],
+          )}
           meta={`${openDeadlines.length} upcoming`}
         />
-        <Metric
-          icon={<FileCheck2 size={18} />}
-          tone="green"
+        <LiveMetric
+          icon={<FileText size={20} />}
+          tone="mint"
           label="Applications live"
-          value={String(liveApplications.length)}
+          value={liveApplications.length}
+          added={newThisMonth(applications.map((application) => application.createdAt))}
+          spark={dailyTotals(applications.map((application) => application.createdAt), 30)}
           meta={`Across ${plural(new Set(liveApplications.map((application) => application.studentId)).size, "student")}`}
         />
       </section>
-      <section className="dashboard-grid">
-        <div className="panel focus-panel">
+
+      <section className="lively-grid">
+        <div className="panel lively-focus">
           <div className="panel-head">
             <div>
               <h2>
-                {attentionStudents.length
-                  ? `${plural(attentionStudents.length, "profile")} ${attentionStudents.length === 1 ? "needs" : "need"} your review`
-                  : "You’re caught up"}
+                {attentionStudents.length ? (
+                  `${plural(attentionStudents.length, "profile")} ${attentionStudents.length === 1 ? "needs" : "need"} your review`
+                ) : (
+                  <>
+                    You’re caught up <PartyPopper className="lively-cheer" size={22} aria-hidden="true" />
+                  </>
+                )}
               </h2>
+              <p className="panel-sub">
+                {attentionStudents.length
+                  ? "Confirm these profiles so their matches can run."
+                  : students.length
+                    ? "No pending profile reviews. Your newest students are below."
+                    : "Add your first student to see them here."}
+              </p>
             </div>
-            <button
-              className="text-button"
-              onClick={() => onNavigate("Students")}
-            >
+            <button className="text-button" onClick={() => onNavigate("Students")}>
               View queue <ArrowRight size={14} />
             </button>
           </div>
-          <div className="focus-list">
-            {attentionStudents.map((student) => (
-              <button key={student.id} onClick={() => onStudent(student)}>
-                <span className="focus-icon violet">
-                  <Sparkles size={17} />
-                </span>
-                <span>
-                  <strong>Review {student.name}’s profile</strong>
-                  <small>
-                    {student.progress}% complete · updated {student.updated}
-                  </small>
-                </span>
-                <span className="priority orange">REVIEW</span>
-                <ChevronRight size={16} />
-              </button>
-            ))}
-            {!attentionStudents.length && (
-              <div className="empty-state">
-                <CheckCircle2 size={24} />
-                <strong>No pending profile reviews</strong>
-                <span>New students requiring attention will appear here.</span>
-              </div>
-            )}
+          <div className="lively-focus-body">
+            <div className="lively-people">
+              {reviewRows.map((student) => {
+                const isNew = TODAY.getTime() - Date.parse(student.createdAt) < 2 * DAY_MS;
+                return (
+                  <button
+                    key={student.id}
+                    className="lively-person"
+                    onClick={() => onStudent(student)}
+                  >
+                    <span className={`avatar ${student.tone}`}>{student.initials}</span>
+                    <span className="lively-person-text">
+                      <strong>
+                        {student.name}
+                        {isNew ? <i className="lively-new">New</i> : null}
+                      </strong>
+                      <small>
+                        {attentionStudents.length ? "Profile submitted" : student.degree} ·{" "}
+                        {student.updated}
+                      </small>
+                    </span>
+                    <span className="lively-review">
+                      {attentionStudents.length ? "Review" : "Open"} <ArrowRight size={13} />
+                    </span>
+                  </button>
+                );
+              })}
+              {!reviewRows.length && (
+                <div className="empty-state">
+                  <UserPlus size={24} />
+                  <strong>No students yet</strong>
+                  <span>Add a student to start matching.</span>
+                </div>
+              )}
+            </div>
+            <div className="lively-art" aria-hidden="true">
+              <span className="lively-art-blob" />
+              <span className="lively-art-card">
+                <GraduationCap size={30} />
+              </span>
+              <span className="lively-art-check">
+                <Check size={20} />
+              </span>
+              <p className="lively-note lively-art-note">
+                Different students.
+                <br />
+                Brighter destinations.
+              </p>
+            </div>
           </div>
         </div>
-        <div className="panel deadline-card">
+
+        <ProgressChart students={students} matches={matches} applications={applications} />
+
+        <div className="panel lively-deadlines">
           <div className="panel-head">
             <div>
-              <h2>Upcoming deadlines</h2>
+              <h2>
+                <CalendarDays size={20} aria-hidden="true" /> Upcoming deadlines
+              </h2>
             </div>
-            <button
-              className="icon-button"
-              aria-label="Open calendar"
-              onClick={() => onNavigate("Calendar")}
-            >
-              <CalendarDays size={16} />
+            <button className="text-button" onClick={() => onNavigate("Calendar")}>
+              View all <ArrowRight size={14} />
             </button>
           </div>
-          <div className="compact-deadlines">
-            {openDeadlines.slice(0, 3).map((deadline) => {
+          <div className="lively-deadline-list">
+            {openDeadlines.slice(0, 4).map((deadline) => {
               const due = new Date(deadline.dueAt);
               const days = daysUntil(deadline.dueAt);
               return (
-                <Deadline
+                <button
                   key={deadline.id}
-                  date={String(due.getDate()).padStart(2, "0")}
-                  month={due
-                    .toLocaleDateString("en-GB", { month: "short" })
-                    .toUpperCase()}
-                  title={deadline.title}
-                  detail={[
-                    deadline.type.replaceAll("_", " "),
-                    deadline.studentName,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  days={days === 0 ? "Today" : `${days} days`}
-                  urgent={days <= 7}
-                />
+                  className={`lively-deadline ${days <= 7 ? "is-soon" : ""}`}
+                  onClick={() => onNavigate("Calendar")}
+                >
+                  <span className="lively-date">
+                    <small>{due.toLocaleDateString("en-GB", { month: "short" })}</small>
+                    <b>{due.getDate()}</b>
+                  </span>
+                  <span className="lively-deadline-text">
+                    <strong>{deadline.university || deadline.title}</strong>
+                    <small>
+                      {deadline.university ? deadline.title : deadline.type.replaceAll("_", " ")}
+                    </small>
+                    <small>
+                      {[deadline.studentName, days === 0 ? "Today" : `in ${plural(days, "day")}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
               );
             })}
             {!openDeadlines.length && (
               <div className="empty-state">
                 <CalendarDays size={24} />
                 <strong>No upcoming deadlines</strong>
-                <span>Add deadlines from applications to see them here.</span>
+                <span>Deadlines you add from applications will appear here.</span>
               </div>
             )}
           </div>
-          <button className="full-link" onClick={() => onNavigate("Calendar")}>
-            Open deadline calendar <ArrowRight size={14} />
-          </button>
         </div>
       </section>
+
       <section className="dashboard-grid lower-grid">
         <div className="panel recommended-panel">
           <div className="panel-head">
@@ -1925,14 +2041,274 @@ function Overview({
           <button onClick={() => onNavigate("Reports")}>
             See workspace report <ArrowRight size={14} />
           </button>
-          <div className="impact-lines">
-            <i />
-            <i />
-            <i />
-          </div>
         </div>
       </section>
     </>
+  );
+}
+
+const DAY_MS = 86_400_000;
+
+/** Running total at the end of each of the last `days` days. */
+function dailyTotals(timestamps: string[], days: number) {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const times = timestamps
+    .map((value) => Date.parse(value))
+    .filter((value) => !Number.isNaN(value))
+    .sort((a, b) => a - b);
+  return Array.from({ length: days }, (_, index) => {
+    const cutoff = end.getTime() - (days - 1 - index) * DAY_MS;
+    let count = 0;
+    for (const time of times) {
+      if (time > cutoff) break;
+      count += 1;
+    }
+    return count;
+  });
+}
+
+/** How many items fall due on each of the next `days` days. */
+function upcomingPerDay(timestamps: string[], days: number) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const counts = Array.from({ length: days }, () => 0);
+  for (const value of timestamps) {
+    const index = Math.floor((Date.parse(value) - start.getTime()) / DAY_MS);
+    if (index >= 0 && index < days) counts[index] += 1;
+  }
+  return counts;
+}
+
+function countSince(timestamps: string[], days: number) {
+  const since = Date.now() - days * DAY_MS;
+  return timestamps.filter((value) => Date.parse(value) >= since).length;
+}
+
+function Sparkline({ values, tone }: { values: number[]; tone: string }) {
+  const width = 64;
+  const height = 28;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const points = values.map(
+    (value, index) =>
+      [
+        (index / Math.max(values.length - 1, 1)) * width,
+        height - 4 - ((value - min) / span) * (height - 8),
+      ] as const,
+  );
+  const line = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  return (
+    <svg
+      className={`sparkline ${tone}`}
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      aria-hidden="true"
+    >
+      <polygon points={`0,${height} ${line} ${width},${height}`} />
+      <polyline points={line} />
+    </svg>
+  );
+}
+
+function LiveMetric({
+  icon,
+  tone,
+  label,
+  value,
+  added,
+  chip,
+  spark,
+  meta,
+}: {
+  icon: React.ReactNode;
+  tone: string;
+  label: string;
+  value: number;
+  added?: number;
+  chip?: { text: string; tone: "up" | "down" | "neutral" };
+  spark: number[];
+  meta: string;
+}) {
+  const badge =
+    chip ??
+    (added
+      ? { text: `+${added} this month`, tone: "up" as const }
+      : { text: "None new", tone: "neutral" as const });
+  return (
+    <div className={`live-metric ${tone}`}>
+      <span className="live-metric-icon">{icon}</span>
+      <div className="live-metric-body">
+        <div className="live-metric-top">
+          <span className="live-metric-label">{label}</span>
+          <Sparkline values={spark} tone={tone} />
+        </div>
+        <div className="live-metric-value">
+          <strong>{value}</strong>
+          <small className={`live-chip ${badge.tone}`}>
+            {badge.tone === "up" && added ? <TrendingUp size={12} /> : null}
+            {badge.text}
+          </small>
+        </div>
+        <span className="live-metric-meta">{meta}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Smooth line through points (Catmull-Rom converted to cubic Béziers). */
+function smoothPath(points: (readonly [number, number])[]) {
+  if (points.length < 2) return "";
+  let path = `M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const [x0, y0] = points[index - 1] ?? points[index];
+    const [x1, y1] = points[index];
+    const [x2, y2] = points[index + 1];
+    const [x3, y3] = points[index + 2] ?? points[index + 1];
+    const c1x = x1 + (x2 - x0) / 6;
+    const c1y = y1 + (y2 - y0) / 6;
+    const c2x = x2 - (x3 - x1) / 6;
+    const c2y = y2 - (y3 - y1) / 6;
+    path += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+  }
+  return path;
+}
+
+/** Axis maximum made of four equal steps of 1, 2 or 5 × 10ⁿ, so every tick is a whole number. */
+function niceCeiling(value: number) {
+  const raw = Math.max(value, 4) / 4;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((candidate) => candidate * power).find((candidate) => candidate >= raw) ?? raw;
+  return Math.ceil(step) * 4;
+}
+
+function ProgressChart({
+  students,
+  matches,
+  applications,
+}: {
+  students: Student[];
+  matches: MatchResult[];
+  applications: Application[];
+}) {
+  const [range, setRange] = useState(30);
+  const [hover, setHover] = useState<number | null>(null);
+  const firstMatchByStudent = new Map<string, string>();
+  for (const match of matches) {
+    const current = firstMatchByStudent.get(match.studentId);
+    if (!current || Date.parse(match.generatedAt) < Date.parse(current))
+      firstMatchByStudent.set(match.studentId, match.generatedAt);
+  }
+  const series = [
+    { key: "applications", label: "Applications", tone: "ink", values: dailyTotals(applications.map((item) => item.createdAt), range) },
+    { key: "matched", label: "Students matched", tone: "rose", values: dailyTotals([...firstMatchByStudent.values()], range) },
+    { key: "students", label: "Students", tone: "lavender", values: dailyTotals(students.map((item) => item.createdAt), range) },
+  ];
+  const width = 360;
+  const height = 190;
+  const left = 30;
+  const bottom = 24;
+  const top = 10;
+  const max = niceCeiling(Math.max(...series.flatMap((item) => item.values), 1));
+  const right = 20;
+  const x = (index: number) => left + (index / (range - 1)) * (width - left - right);
+  const y = (value: number) => top + (1 - value / max) * (height - top - bottom);
+  const dates = Array.from({ length: range }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (range - 1 - index));
+    return date;
+  });
+  const label = (date: Date) => date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const tickIndexes = [0, 1, 2, 3, 4].map((step) => Math.round((step / 4) * (range - 1)));
+  const latest = series.map((item) => `${item.values[range - 1]} ${item.label.toLowerCase()}`).join(", ");
+  const active = hover ?? null;
+  return (
+    <div className="panel lively-progress">
+      <div className="panel-head">
+        <div>
+          <h2>Student progress</h2>
+        </div>
+        <label className="lively-range">
+          <span className="sr-only">Chart range</span>
+          <select value={range} onChange={(event) => setRange(Number(event.target.value))}>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+          <ChevronDown size={14} aria-hidden="true" />
+        </label>
+      </div>
+      <ul className="lively-legend">
+        {series.map((item) => (
+          <li key={item.key} className={item.tone}>
+            <i aria-hidden="true" /> {item.label}
+          </li>
+        ))}
+      </ul>
+      <div className="lively-chart">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={`Running totals over the last ${range} days. Today: ${latest}.`}
+          onMouseLeave={() => setHover(null)}
+          onMouseMove={(event) => {
+            const box = event.currentTarget.getBoundingClientRect();
+            const ratio = ((event.clientX - box.left) / box.width) * width;
+            const index = Math.round(((ratio - left) / (width - left - right)) * (range - 1));
+            setHover(Math.max(0, Math.min(range - 1, index)));
+          }}
+        >
+          {[0, 0.25, 0.5, 0.75, 1].map((step) => (
+            <g key={step}>
+              <line className="grid" x1={left} x2={width - right} y1={y(max * step)} y2={y(max * step)} />
+              <text className="axis" x={left - 8} y={y(max * step) + 3} textAnchor="end">
+                {Math.round(max * step)}
+              </text>
+            </g>
+          ))}
+          {tickIndexes.map((index) => (
+            <text
+              key={index}
+              className="axis"
+              x={x(index)}
+              y={height - 6}
+              textAnchor={index === 0 ? "start" : index === range - 1 ? "end" : "middle"}
+            >
+              {label(dates[index])}
+            </text>
+          ))}
+          {series.map((item) => (
+            <path
+              key={item.key}
+              className={`line ${item.tone}`}
+              d={smoothPath(item.values.map((value, index) => [x(index), y(value)] as const))}
+            />
+          ))}
+          {active !== null && (
+            <g>
+              <line className="guide" x1={x(active)} x2={x(active)} y1={top} y2={height - bottom} />
+              {series.map((item) => (
+                <circle key={item.key} className={`dot ${item.tone}`} cx={x(active)} cy={y(item.values[active])} r={4} />
+              ))}
+            </g>
+          )}
+        </svg>
+        {active !== null && (
+          <div
+            className="lively-tooltip"
+            style={{ left: `clamp(70px, ${(x(active) / width) * 100}%, calc(100% - 70px))` }}
+          >
+            <b>{label(dates[active])}</b>
+            {series.map((item) => (
+              <span key={item.key} className={item.tone}>
+                <i aria-hidden="true" /> {item.values[active]} {item.label.toLowerCase()}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

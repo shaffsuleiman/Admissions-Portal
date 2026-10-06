@@ -81,6 +81,7 @@ export type Student = {
   tone: string;
   updated: string;
   updatedAt: string;
+  createdAt: string;
   targetCountries: string[];
   targetIntake: string;
   budget: number | null;
@@ -205,6 +206,7 @@ export type Application = {
   university: string;
   deadline: string;
   submittedAt: string | null;
+  createdAt: string;
   tone: string;
 };
 
@@ -621,6 +623,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
       tone: toneFor(String(row.id)),
       updated: relativeDate(String(row.updated_at ?? "")),
       updatedAt: String(row.updated_at ?? ""),
+      createdAt: String(row.created_at ?? row.updated_at ?? ""),
       targetCountries: countries,
       targetIntake: String(row.target_intake ?? ""),
       budget:
@@ -765,6 +768,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
       ),
       submittedAt:
         typeof row.submitted_at === "string" ? row.submitted_at : null,
+      createdAt: String(row.created_at ?? ""),
       tone: toneFor(String(row.student_id)),
     };
   });
