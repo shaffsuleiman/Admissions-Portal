@@ -24,7 +24,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { ProfileReview } from "@/components/ProfileReview";
 import { ProgrammeEditor } from "@/components/ProgrammeEditor";
 import { ShortlistReport } from "@/components/ShortlistReport";
-import { hasEligibilityRules } from "@/lib/matching/engine";
+import { hasEligibilityRules, studentEctsRatio } from "@/lib/matching/engine";
 import {
   createApplicationFromMatch,
   aiReviewProgramme,
@@ -878,7 +878,7 @@ function QuickStartTutorial({
             </div>
           </div>
           <div className="tour-progress" aria-hidden="true">
-            <span style={{ width: `${((step + 1) / quickStartSteps.length) * 100}%` }} />
+            <span style={{ transform: `scaleX(${(step + 1) / quickStartSteps.length})` }} />
           </div>
           <footer className="tour-footer">
             <div className="tour-navigation">
@@ -1740,15 +1740,15 @@ function Overview({
         <Metric
           icon={<Sparkles size={18} />}
           tone="violet"
-          label="Matches generated"
-          value={String(matches.length)}
-          meta={`${matches.filter((match) => match.status === "Eligible").length} eligible`}
+          label="Eligible matches"
+          value={String(matches.filter((match) => match.status === "Eligible").length)}
+          meta={`${plural(matches.length, "programme")} checked`}
         />
         <Metric
           icon={<CalendarDays size={18} />}
           tone="orange"
           label="Due this week"
-          value={String(dueThisWeek).padStart(2, "0")}
+          value={String(dueThisWeek)}
           meta={`${openDeadlines.length} upcoming`}
         />
         <Metric
@@ -1756,7 +1756,7 @@ function Overview({
           tone="green"
           label="Applications live"
           value={String(liveApplications.length)}
-          meta={`Across ${new Set(liveApplications.map((application) => application.studentId)).size} students`}
+          meta={`Across ${plural(new Set(liveApplications.map((application) => application.studentId)).size, "student")}`}
         />
       </section>
       <section className="dashboard-grid">
@@ -1766,7 +1766,7 @@ function Overview({
               <p className="eyebrow">FOCUS FOR TODAY</p>
               <h2>
                 {attentionStudents.length
-                  ? `${attentionStudents.length} profiles need your review`
+                  ? `${plural(attentionStudents.length, "profile")} ${attentionStudents.length === 1 ? "needs" : "need"} your review`
                   : "You’re caught up"}
               </h2>
             </div>
@@ -1929,8 +1929,9 @@ function Overview({
             place.
           </h2>
           <p>
-            {applications.length} applications and {deadlines.length} deadlines
-            are currently tracked.
+            {plural(applications.length, "application")} and{" "}
+            {plural(deadlines.length, "deadline")}{" "}
+            {applications.length + deadlines.length === 1 ? "is" : "are"} currently tracked.
           </p>
           <button onClick={() => onNavigate("Reports")}>
             See workspace report <ArrowRight size={14} />
@@ -2194,6 +2195,69 @@ const scoreTone = (status: string) =>
       ? "score-warn"
       : "";
 
+/** "1 student", "3 students". */
+function plural(count: number, one: string, many = `${one}s`) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/** Percentages under 1% keep one decimal so a small share never reads as zero. */
+function percent(part: number, whole: number) {
+  if (!whole) return "0%";
+  const value = (part / whole) * 100;
+  if (value > 0 && value < 1) return `${value.toFixed(1)}%`;
+  return `${Math.round(value)}%`;
+}
+
+/** Mapped subject credits when they exist, otherwise the degree total from the student's own credit-hour ratio. */
+function ectsSummary(student: Student) {
+  const mapped = Math.round(student.credits.reduce((total, credit) => total + credit.ects, 0));
+  if (mapped > 0) return `${mapped} mapped ECTS`;
+  const ratio = studentEctsRatio(student.academic);
+  if (ratio) return `${ratio.degreeEcts} ECTS from ${ratio.totalCreditHours} credit hours`;
+  return "Credits not mapped yet";
+}
+
+/**
+ * The next four intakes that have not started yet. Italian programmes start in
+ * September (Fall) or February (Spring), so an intake is offered only before its start month.
+ */
+function upcomingIntakes(from: Date, count = 4) {
+  const intakes: { label: string; start: Date }[] = [];
+  for (let year = from.getFullYear(); intakes.length < count + 2; year += 1) {
+    intakes.push({ label: `Spring ${year}`, start: new Date(year, 1, 1) });
+    intakes.push({ label: `Fall ${year}`, start: new Date(year, 8, 1) });
+  }
+  return intakes.filter((intake) => intake.start > from).slice(0, count).map((intake) => intake.label);
+}
+
+const UPCOMING_INTAKES = upcomingIntakes(TODAY);
+const DEFAULT_INTAKE = UPCOMING_INTAKES.find((intake) => intake.startsWith("Fall")) ?? UPCOMING_INTAKES[0];
+
+const MATCH_PAGE_SIZE = 20;
+const PROGRAMME_PAGE_SIZE = 50;
+
+type MatchSort = "best" | "deadline" | "tuition";
+
+/** Best match keeps the engine's ranking; the other sorts put missing values last. */
+function sortMatches(list: MatchResult[], sort: MatchSort) {
+  if (sort === "best") return list;
+  const value = (match: MatchResult) =>
+    sort === "deadline"
+      ? match.deadlineIso
+        ? Date.parse(match.deadlineIso)
+        : Number.POSITIVE_INFINITY
+      : (match.feeEur ?? Number.POSITIVE_INFINITY);
+  return [...list].sort((a, b) => value(a) - value(b));
+}
+
+/** Eligibility checks first, preferences after, so the reason a result passed or failed reads first. */
+function orderedChecks(checks: MatchResult["checks"]) {
+  return [
+    ...checks.filter((check) => check.category !== "preference"),
+    ...checks.filter((check) => check.category === "preference"),
+  ];
+}
+
 function MatchesView({
   students,
   matches,
@@ -2214,6 +2278,8 @@ function MatchesView({
   onNotify: (message: string) => void;
 }) {
   const [filter, setFilter] = useState("All results");
+  const [sort, setSort] = useState<MatchSort>("best");
+  const [shown, setShown] = useState(MATCH_PAGE_SIZE);
   const [studentId, setStudentId] = useState(students[0]?.id ?? "");
   const [running, setRunning] = useState(false);
   const [researching, setResearching] = useState(false);
@@ -2224,9 +2290,18 @@ function MatchesView({
   const studentMatches = matches.filter(
     (match) => match.studentId === student?.id,
   );
-  const visible = studentMatches.filter(
-    (match) => filter === "All results" || match.status === filter,
+  const filtered = sortMatches(
+    studentMatches.filter(
+      (match) => filter === "All results" || match.status === filter,
+    ),
+    sort,
   );
+  // Rendering hundreds of full cards at once makes the page very slow, so results load in pages.
+  const visible = filtered.slice(0, shown);
+  const chooseFilter = (next: string) => {
+    setFilter(next);
+    setShown(MATCH_PAGE_SIZE);
+  };
   const run = async () => {
     if (!student) return;
     setRunning(true);
@@ -2326,7 +2401,7 @@ function MatchesView({
               value={student.id}
               onChange={(event) => {
                 setStudentId(event.target.value);
-                setFilter("All results");
+                chooseFilter("All results");
                 setLiveResearch(null);
               }}
             >
@@ -2347,15 +2422,7 @@ function MatchesView({
           </span>
           <span>
             <BookOpen size={15} />
-            <b>
-              {Math.round(
-                student.credits.reduce(
-                  (total, credit) => total + credit.ects,
-                  0,
-                ),
-              )}{" "}
-              mapped ECTS
-            </b>
+            <b>{ectsSummary(student)}</b>
             <small>
               {student.academic.confirmedAt
                 ? `Confirmed ${new Date(student.academic.confirmedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
@@ -2480,16 +2547,28 @@ function MatchesView({
                 key={item}
                 aria-pressed={filter === item}
                 className={filter === item ? "active" : ""}
-                onClick={() => setFilter(item)}
+                onClick={() => chooseFilter(item)}
               >
                 {item}
               </button>
             ),
           )}
         </div>
-        <button className="outline-button">
-          <ListFilter size={15} /> Sort: Best match
-        </button>
+        <label className="outline-button match-sort">
+          <ListFilter size={15} />
+          <span className="sr-only">Sort results</span>
+          <select
+            value={sort}
+            onChange={(event) => {
+              setSort(event.target.value as MatchSort);
+              setShown(MATCH_PAGE_SIZE);
+            }}
+          >
+            <option value="best">Sort: Best match</option>
+            <option value="deadline">Sort: Earliest deadline</option>
+            <option value="tuition">Sort: Lowest tuition</option>
+          </select>
+        </label>
       </div>
       <div className="match-card-list">
         {visible.map((match) => (
@@ -2553,28 +2632,32 @@ function MatchesView({
             <div className="rule-bar">
               <div>
                 {match.checks.length
-                  ? match.checks.map((check, index) => (
-                      <span
-                        key={`${check.key}-${index}`}
-                        className={
-                          check.outcome === "fail"
-                            ? "fail"
-                            : check.outcome === "borderline"
-                              ? "warn"
-                              : ""
-                        }
-                        title={check.label}
-                      >
-                        {check.outcome === "fail" ? (
-                          <X size={13} />
-                        ) : check.outcome === "borderline" ? (
-                          <CircleAlert size={13} />
-                        ) : (
-                          <Check size={13} />
-                        )}
-                        {check.detail}
-                      </span>
-                    ))
+                  ? orderedChecks(match.checks).map((check, index) => {
+                      // Preferences only affect ranking, so a mismatch is a note, never a red failure.
+                      const preference = check.category === "preference";
+                      const tone =
+                        check.outcome === "pass"
+                          ? ""
+                          : preference || check.outcome === "borderline"
+                            ? "warn"
+                            : "fail";
+                      return (
+                        <span
+                          key={`${check.key}-${index}`}
+                          className={`${tone} ${preference && check.outcome !== "pass" ? "preference" : ""}`.trim()}
+                          title={check.label}
+                        >
+                          {tone === "fail" ? (
+                            <X size={13} />
+                          ) : tone === "warn" ? (
+                            <CircleAlert size={13} />
+                          ) : (
+                            <Check size={13} />
+                          )}
+                          {preference && check.outcome !== "pass" ? `Preference: ${check.detail}` : check.detail}
+                        </span>
+                      );
+                    })
                   : match.reasons.map((reason, index) => (
                       <span key={`${reason}-${index}`}>
                         <Check size={13} />
@@ -2605,6 +2688,17 @@ function MatchesView({
             </div>
           </article>
         ))}
+        {filtered.length > visible.length && (
+          <button
+            className="secondary-button show-more"
+            onClick={() => setShown((count) => count + MATCH_PAGE_SIZE)}
+          >
+            Show {Math.min(MATCH_PAGE_SIZE, filtered.length - visible.length)} more
+            <small>
+              {visible.length} of {filtered.length} shown
+            </small>
+          </button>
+        )}
         {!visible.length && (
           <div className="panel empty-state">
             <Sparkles size={28} />
@@ -2781,6 +2875,10 @@ function ProgrammesView({
   const [aiReviewing, setAiReviewing] = useState({ done: 0, total: 0, published: 0 });
   const stopAiReview = useRef(false);
   const queueMode = statusFilter === "queue";
+  // The list renders in pages; changing the search or filters starts again from the first page.
+  const filterKey = `${query}|${levelFilter}|${statusFilter}`;
+  const [page, setPage] = useState({ key: filterKey, count: PROGRAMME_PAGE_SIZE });
+  const shownCount = page.key === filterKey ? page.count : PROGRAMME_PAGE_SIZE;
   const visible = programmes
     .filter((programme) => {
       const matchesQuery =
@@ -3234,7 +3332,7 @@ function ProgrammesView({
           <span>DATA STATUS</span>
           <span />
         </div>
-        {visible.map((programme) => {
+        {visible.slice(0, shownCount).map((programme) => {
           const cells = (
             <>
               <span className="person-cell">
@@ -3308,6 +3406,17 @@ function ProgrammesView({
             </a>
           );
         })}
+        {visible.length > shownCount && (
+          <button
+            className="secondary-button show-more"
+            onClick={() => setPage({ key: filterKey, count: shownCount + PROGRAMME_PAGE_SIZE })}
+          >
+            Show {Math.min(PROGRAMME_PAGE_SIZE, visible.length - shownCount)} more
+            <small>
+              {shownCount} of {visible.length} shown
+            </small>
+          </button>
+        )}
         {!visible.length && (
           <div className="empty-state">
             <Search size={24} />
@@ -3811,20 +3920,21 @@ function ReportsView({
           .map((match) => match.studentId),
       ).size,
   );
-  const chartMax = Math.max(5, ...shortlists);
-  const eligibleRate = matches.length
-    ? Math.round(
-        (matches.filter((match) => match.status === "Eligible").length /
-          matches.length) *
-          100,
-      )
-    : 0;
+  // A multiple of 3 keeps the four axis ticks whole numbers at even spacing.
+  const chartMax = Math.max(3, Math.ceil(Math.max(...shortlists) / 3) * 3);
+  const eligibleCount = matches.filter((match) => match.status === "Eligible").length;
+  const eligibleRate = percent(eligibleCount, matches.length);
   const completedDeadlines = deadlines.filter(
     (deadline) => deadline.completedAt,
   ).length;
-  const deadlinesMet = deadlines.length
-    ? Math.round((completedDeadlines / deadlines.length) * 100)
-    : 0;
+  // Only deadlines whose date has passed can be met or missed; future ones are still open.
+  const dueDeadlines = deadlines.filter(
+    (deadline) => deadline.completedAt || daysUntil(deadline.dueAt) < 0,
+  );
+  const metDeadlines = dueDeadlines.filter((deadline) => deadline.completedAt).length;
+  const deadlinesMet = dueDeadlines.length
+    ? Math.round((metDeadlines / dueDeadlines.length) * 100)
+    : null;
   const onTrack = students.filter((student) =>
     ["shortlist_ready", "applying", "enrolled"].includes(student.status),
   ).length;
@@ -3840,7 +3950,9 @@ function ReportsView({
         Math.min(
           100,
           Math.round(
-            (onTrack / students.length) * 70 + (deadlinesMet || 30) * 0.3,
+            deadlinesMet === null
+              ? (onTrack / students.length) * 100
+              : (onTrack / students.length) * 70 + deadlinesMet * 0.3,
           ),
         ),
       )
@@ -3858,10 +3970,10 @@ function ReportsView({
             downloadCsv("workspace-report.csv", [
               ["Metric", "Value"],
               ["Students", students.length],
-              ["Matches", matches.length],
-              ["Eligible match rate", `${eligibleRate}%`],
+              ["Programmes checked", matches.length],
+              ["Eligible match rate", eligibleRate],
               ["Applications", applications.length],
-              ["Deadlines met", `${deadlinesMet}%`],
+              ["Deadlines met", deadlinesMet === null ? "None due yet" : `${deadlinesMet}%`],
             ]);
             onNotify("Report downloaded");
           }}
@@ -3873,30 +3985,36 @@ function ReportsView({
         <Metric
           icon={<Sparkles size={18} />}
           tone="blue"
-          label="Matches generated"
+          label="Programmes checked"
           value={String(matches.length)}
-          meta={`${new Set(matches.map((match) => match.studentId)).size} students matched`}
+          meta={`For ${plural(new Set(matches.map((match) => match.studentId)).size, "student")}`}
         />
         <Metric
           icon={<CheckCircle2 size={18} />}
           tone="green"
           label="Eligible match rate"
-          value={`${eligibleRate}%`}
-          meta={`${matches.filter((match) => match.status === "Eligible").length} eligible results`}
+          value={eligibleRate}
+          meta={`${plural(eligibleCount, "eligible result")}`}
         />
         <Metric
           icon={<Users size={18} />}
           tone="violet"
           label="Students progressed"
-          value={String(onTrack).padStart(2, "0")}
-          meta={`of ${students.length} students`}
+          value={String(onTrack)}
+          meta={`of ${plural(students.length, "student")}`}
         />
         <Metric
           icon={<CalendarDays size={18} />}
           tone="orange"
           label="Deadlines met"
-          value={`${deadlinesMet}%`}
-          meta={`${completedDeadlines} completed`}
+          value={deadlinesMet === null ? "None due" : `${deadlinesMet}%`}
+          meta={
+            deadlinesMet !== null
+              ? `${completedDeadlines} completed`
+              : deadlines.length
+                ? `${plural(deadlines.length, "deadline")} still open`
+                : "No deadlines yet"
+          }
         />
       </section>
       <div className="report-grid">
@@ -3911,8 +4029,8 @@ function ReportsView({
           <div className="bar-chart">
             <div className="y-labels">
               <span>{chartMax}</span>
-              <span>{Math.round(chartMax * 0.66)}</span>
-              <span>{Math.round(chartMax * 0.33)}</span>
+              <span>{(chartMax / 3) * 2}</span>
+              <span>{chartMax / 3}</span>
               <span>0</span>
             </div>
             <div
@@ -3938,7 +4056,10 @@ function ReportsView({
         <div className="panel health-panel">
           <p className="eyebrow">STUDENT PIPELINE</p>
           <h2>Workspace health</h2>
-          <div className="health-ring">
+          <div
+            className={`health-ring ${health >= 75 ? "is-healthy" : health >= 45 ? "is-attention" : "is-starting"}`}
+            style={{ "--health": `${health}%` } as CSSProperties}
+          >
             <div>
               <strong>{health}</strong>
               <span>/ 100</span>
@@ -3951,7 +4072,7 @@ function ReportsView({
                 ? "Needs attention"
                 : "Getting started"}
           </strong>
-          <p>Based on progress and completed deadlines</p>
+          <p>{deadlinesMet === null ? "Based on student progress" : "Based on progress and deadlines met"}</p>
           <div className="health-list">
             <span>
               <i className="green" />
@@ -4777,7 +4898,7 @@ function NewStudentWizard({
   const [budget, setBudget] = useState("");
   const [english, setEnglish] = useState("");
   const [country, setCountry] = useState("Italy");
-  const [intake, setIntake] = useState("Fall 2027");
+  const [intake, setIntake] = useState(DEFAULT_INTAKE);
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -5067,8 +5188,9 @@ function NewStudentWizard({
                     value={intake}
                     onChange={(event) => setIntake(event.target.value)}
                   >
-                    <option>Fall 2027</option>
-                    <option>Spring 2027</option>
+                    {UPCOMING_INTAKES.map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
                   </select>
                 </label>
                 <label>

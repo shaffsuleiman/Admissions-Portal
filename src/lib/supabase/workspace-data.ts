@@ -10,6 +10,7 @@ import {
   type Conversion,
   type ProgrammeRules,
 } from "@/lib/matching/engine";
+import { latestProgrammeEditions } from "@/lib/matching/catalogue";
 
 export type Workspace = {
   id: string;
@@ -149,7 +150,9 @@ export type MatchResult = {
   eligibilityScore: number;
   fitScore: number | null;
   fee: string;
+  feeEur: number | null;
   deadline: string;
+  deadlineIso: string | null;
   verified: string;
   logo: string;
   tone: string;
@@ -703,6 +706,14 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
             ? programme.annual_tuition_eur
             : null,
         ),
+        feeEur:
+          typeof programme.annual_tuition_eur === "number"
+            ? programme.annual_tuition_eur
+            : null,
+        deadlineIso:
+          typeof programme.application_deadline === "string"
+            ? programme.application_deadline
+            : null,
         deadline: displayDate(
           typeof programme.application_deadline === "string"
             ? programme.application_deadline
@@ -1206,7 +1217,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
       supabase
         .from("programmes")
         .select(
-          "id, university_id, requirements, application_deadline, verification_status, annual_tuition_eur, intake, ai_confidence",
+          "id, university_id, university_name, programme_name, degree_level, academic_year, requirements, application_deadline, verification_status, annual_tuition_eur, intake, ai_confidence",
         )
         .in("verification_status", ["ai_reviewed", "verified"]),
       supabase
@@ -1231,8 +1242,10 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     throw new Error(
       "Review and confirm the student’s academic profile before matching.",
     );
-  const usableProgrammes = (programmesResult.data ?? []).filter((programme) =>
-    hasEligibilityRules(normalizeRules(programme.requirements)),
+  const usableProgrammes = latestProgrammeEditions(
+    (programmesResult.data ?? []).filter((programme) =>
+      hasEligibilityRules(normalizeRules(programme.requirements)),
+    ),
   );
   if (!usableProgrammes.length)
     throw new Error(
@@ -1312,6 +1325,13 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     .from("matches")
     .upsert(rows, { onConflict: "student_id,programme_id" });
   if (matchError) throw matchError;
+  // Results for programmes this run no longer checks (rules removed, or an older edition) are stale.
+  const { error: staleError } = await supabase
+    .from("matches")
+    .delete()
+    .eq("student_id", studentId)
+    .not("programme_id", "in", `(${rows.map((row) => row.programme_id).join(",")})`);
+  if (staleError) throw staleError;
   const { error: studentError } = await supabase
     .from("students")
     .update({ status: "shortlist_ready" })
