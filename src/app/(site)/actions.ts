@@ -35,7 +35,7 @@ async function save(row: Record<string, string | null>, values: Record<string, s
   const supabase = await createClient();
   const { error } = await supabase.from("website_enquiries").insert(row);
   if (error) {
-    return { status: "error", message: "We could not send this. Your details are still here—try again in a minute.", values };
+    return { status: "error", message: "We could not send this. Your details are still here, so try again in a minute.", values };
   }
   return { status: "sent" };
 }

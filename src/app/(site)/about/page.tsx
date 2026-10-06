@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, BookOpenCheck, Link2, UserCheck } from "lucide-react";
 import pisaPhoto from "../../../../public/images/campus/pisa.jpg";
-import { CATALOGUE, PHOTOS } from "../content";
+import { PHOTOS } from "../content";
 
 export const metadata: Metadata = {
   title: "About",
@@ -72,9 +72,8 @@ export default function AboutPage() {
             <h2>What we built</h2>
             <p>
               Eligify converts each student&apos;s credits using their own ratio of ECTS to credit hours, then checks
-              them against the entry rules of {CATALOGUE.programmes} English-taught programmes at{" "}
-              {CATALOGUE.universities} Italian universities. Every result says why it matched or nearly matched, and
-              links to the official programme page so the counsellor can confirm it.
+              them against the published entry rules in our programme catalogue. Every result says why it matched
+              or nearly matched, and links to the official programme page so the counsellor can confirm it.
             </p>
           </div>
           <figure className="site-split-photo">

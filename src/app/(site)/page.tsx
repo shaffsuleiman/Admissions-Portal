@@ -3,25 +3,16 @@ import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
-  Bell,
-  BookOpen,
-  CalendarDays,
   CalendarClock,
-  ChevronRight,
-  CheckCircle2,
-  FileCheck2,
   FileText,
-  LayoutDashboard,
   Link2,
-  Plus,
   Scale,
   ScanText,
-  Search,
   Sparkles,
   Users,
 } from "lucide-react";
 import milanPhoto from "../../../public/images/campus/milan.jpg";
-import { CATALOGUE, PHOTOS } from "./content";
+import { PHOTOS } from "./content";
 
 const STEPS = [
   {
@@ -74,86 +65,106 @@ const FEATURES = [
 export default function HomePage() {
   return (
     <>
-      <section className="site-hero">
-        <div className="site-shell site-hero-inner">
-          <div className="site-hero-copy">
-            <h1>Turn every student profile into a <span>defensible shortlist.</span></h1>
-            <p className="site-lede">
-              Eligify reads your students&apos; documents, converts their credits fairly and checks them against{" "}
-              {CATALOGUE.programmes} English-taught programmes at {CATALOGUE.universities} universities. Your
-              counsellors get clear matches, each linked to the official university page.
+      <section className="archive-hero" aria-labelledby="archive-hero-title">
+        <div className="archive-hero-frame">
+          <div className="archive-intro">
+            <p className="archive-meta">ACCESSION RECORD <span>A/2026/0173</span></p>
+            <h1 id="archive-hero-title">Turn every student profile into a defensible shortlist.</h1>
+            <p className="archive-summary">
+              Read academic documents, convert credits fairly and check every recommendation against official programme requirements.
             </p>
-            <div className="site-actions">
-              <Link href="/book" className="primary-button site-button-lg">
-                Book a consultation <ArrowRight size={16} />
+            <div className="archive-actions">
+              <Link href="/book" className="primary-button archive-primary-action">
+                Book a consultation <ArrowRight size={17} />
               </Link>
-              <Link href="/pricing" className="secondary-button site-button-lg">
-                See pricing
+              <Link href="/pricing" className="archive-secondary-action">
+                See pricing <ArrowRight size={15} />
               </Link>
             </div>
-            <div className="site-hero-proof" aria-label="Product benefits">
-              <span><CheckCircle2 size={15} /> No card required</span>
-              <span><CheckCircle2 size={15} /> Official sources</span>
-              <span><CheckCircle2 size={15} /> Human-reviewed</span>
-            </div>
-          </div>
-          <div className="site-product-wrap" role="img" aria-label="Eligify workspace overview showing students, programme matches, deadlines and applications">
-            <div className="site-product-frame" aria-hidden="true">
-              <div className="site-product-body">
-                <aside className="site-product-nav" aria-hidden="true">
-                  <div className="site-preview-brand"><i /><i /><i /></div>
-                  <small>WORKSPACE</small>
-                  <span className="is-active"><LayoutDashboard size={13} /> Overview</span>
-                  <span><Users size={13} /> Students</span>
-                  <span><Sparkles size={13} /> Matches</span>
-                  <span><BookOpen size={13} /> Programmes</span>
-                </aside>
-                <div className="site-product-workspace">
-                  <div className="site-product-topbar">
-                    <div><span>Workspace</span><ChevronRight size={10} /><strong>Overview</strong></div>
-                    <div><Search size={12} /><Bell size={12} /><span className="site-preview-avatar">AK</span></div>
-                  </div>
-                  <div className="site-product-main">
-                    <div className="site-preview-welcome">
-                      <Image src={milanPhoto} alt="" sizes="480px" loading="eager" placeholder="blur" />
-                      <div>
-                        <small>MONDAY, 5 OCTOBER</small>
-                        <strong>Good morning, Ayesha.</strong>
-                        <span>Here&apos;s what needs your attention.</span>
-                      </div>
-                      <button type="button"><Plus size={11} /> New student</button>
-                    </div>
-                    <div className="site-preview-metrics">
-                      <div><span className="blue"><Users size={12} /></span><small>Active students</small><strong>24</strong><em>3 need review</em></div>
-                      <div><span className="violet"><Sparkles size={12} /></span><small>Matches generated</small><strong>186</strong><em>42 eligible</em></div>
-                      <div><span className="orange"><CalendarDays size={12} /></span><small>Due this week</small><strong>04</strong><em>11 upcoming</em></div>
-                      <div><span className="green"><FileCheck2 size={12} /></span><small>Applications live</small><strong>18</strong><em>Across 9 students</em></div>
-                    </div>
-                    <div className="site-preview-panels">
-                      <div className="site-preview-focus">
-                        <div><small>FOCUS FOR TODAY</small><strong>3 profiles need your review</strong></div>
-                        <div className="site-preview-row"><span className="violet"><Sparkles size={12} /></span><p><b>Review Samira&apos;s profile</b><small>82% complete · updated today</small></p><ChevronRight size={12} /></div>
-                        <div className="site-preview-row"><span className="blue"><ScanText size={12} /></span><p><b>Confirm Bilal&apos;s transcript</b><small>Document reading complete</small></p><ChevronRight size={12} /></div>
-                      </div>
-                      <div className="site-preview-deadlines">
-                        <div><small>UPCOMING</small><strong>Deadlines</strong></div>
-                        <div><b>12<small>NOV</small></b><p>University of Bologna<span>Samira Khan</span></p><em>8 days</em></div>
-                        <div><b>18<small>NOV</small></b><p>University of Padua<span>Hassan Ali</span></p><em>14 days</em></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+
+            <div className="archive-evidence-footer">
+              <dl className="archive-source-index" aria-label="Evidence status">
+                <div><dt>Official sources</dt><dd>Verified</dd></div>
+                <div><dt>Transcripts</dt><dd>Structured</dd></div>
+                <div><dt>Qualifications</dt><dd>Standardised</dd></div>
+                <div><dt>Programme data</dt><dd>Matched</dd></div>
+                <div><dt>Counsellor review</dt><dd>Required</dd></div>
+              </dl>
+
+              <div className="archive-seal" aria-label="A higher standard of evidence">
+                <span>ARCHIVE OF EVIDENCE</span>
+                <strong>ELIGIFY</strong>
+                <p>A higher standard<br />of evidence.</p>
               </div>
             </div>
+          </div>
+
+          <div className="archive-visual">
+            <Image
+              className="archive-assembly"
+              src="/images/site/archive-assembly.png"
+              alt=""
+              width={2048}
+              height={1555}
+              priority
+              sizes="(max-width: 1079px) 0px, 64vw"
+            />
+
+            <ol className="archive-records" aria-label="How a profile becomes a verified shortlist">
+              <li className="archive-record archive-record-student">
+                <span className="archive-record-number">01</span>
+                <span className="archive-record-icon"><Users size={18} /></span>
+                <div><small>Student profile</small><strong>Samira Khan</strong></div>
+                <code>PROFILE / A2026-0173</code>
+              </li>
+              <li className="archive-record archive-record-transcript">
+                <span className="archive-record-number">02</span>
+                <span className="archive-record-icon"><ScanText size={18} /></span>
+                <div><strong>Transcript processed</strong><small>22 subjects identified</small></div>
+                <code>TRANSCRIPT / T024-4510</code>
+              </li>
+              <li className="archive-record archive-record-credits">
+                <span className="archive-record-number">03</span>
+                <span className="archive-record-icon"><Scale size={18} /></span>
+                <div><small>Converted credits</small><strong>128 ECTS</strong></div>
+                <code>CREDITS / C2026-0087</code>
+              </li>
+              <li className="archive-record archive-record-matches">
+                <span className="archive-record-number">04</span>
+                <span className="archive-record-icon"><Sparkles size={18} /></span>
+                <div><strong>34 programme matches</strong></div>
+                <code>MATCHING / M2026-1204</code>
+              </li>
+              <li className="archive-record archive-record-match">
+                <span className="archive-record-number">05</span>
+                <div className="archive-match-copy">
+                  <small>Top programme match</small>
+                  <strong>MSc Computer Science</strong>
+                  <span>University of Milan</span>
+                </div>
+                <span className="archive-match-score">98% match</span>
+                <dl>
+                  <div><dt>Programme code</dt><dd>M-PSC-1023</dd></div>
+                  <div><dt>Degree</dt><dd>MSc</dd></div>
+                  <div><dt>Location</dt><dd>Milan, Italy</dd></div>
+                </dl>
+              </li>
+              <li className="archive-record archive-record-source">
+                <span className="archive-record-number">06</span>
+                <span className="archive-record-icon is-verified"><BadgeCheck size={19} /></span>
+                <div><strong>Official source verified</strong></div>
+                <code>VERIFICATION / V2026-6621</code>
+              </li>
+            </ol>
           </div>
         </div>
       </section>
 
       <section className="site-section" id="how-it-works">
         <div className="site-shell">
-          <div className="site-section-head">
-            <h2>From documents to a shortlist in one sitting</h2>
-            <p>A repeatable, reviewable workflow your whole counselling team can trust.</p>
+          <div className="site-section-head archive-section-heading">
+            <h2>How Eligify builds the shortlist</h2>
+            <p>From academic records to a recommendation your counsellors can explain and verify.</p>
           </div>
           <ol className="site-steps">
             {STEPS.map((step, index) => (
