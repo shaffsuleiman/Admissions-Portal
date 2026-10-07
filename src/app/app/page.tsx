@@ -19,6 +19,7 @@ import pisaPhoto from "../../../public/images/campus/pisa.jpg";
 import romePhoto from "../../../public/images/campus/rome.jpg";
 import turinPhoto from "../../../public/images/campus/turin.jpg";
 import venicePhoto from "../../../public/images/campus/venice.jpg";
+import { campusPhotoFor } from "@/lib/campus-photos";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { ProfileReview } from "@/components/ProfileReview";
@@ -257,32 +258,27 @@ function Brand({ light = false }: { light?: boolean }) {
   );
 }
 
-const campusPhotos: { match: RegExp; photo: StaticImageData; place: string; credit?: string }[] =
+// Wide city photos for the dashboard hero; university badges use campusPhotoFor.
+const heroCampuses: { photo: StaticImageData; place: string; credit?: string }[] =
   [
-    { match: /padua|padova/i, photo: paduaPhoto, place: "Palazzo Bo, Padua", credit: "Didier Descouens, CC BY-SA 4.0" },
-    { match: /bologna/i, photo: bolognaPhoto, place: "Archiginnasio, Bologna", credit: "Wwikiwalter, CC BY-SA 4.0" },
+    { photo: paduaPhoto, place: "Palazzo Bo, Padua", credit: "Didier Descouens, CC BY-SA 4.0" },
+    { photo: bolognaPhoto, place: "Archiginnasio, Bologna", credit: "Wwikiwalter, CC BY-SA 4.0" },
     {
-      match: /torino|turin/i,
       photo: turinPhoto,
       place: "Castello del Valentino, Turin",
     },
-    { match: /milan|milano/i, photo: milanPhoto, place: "Ca’ Granda, Milan" },
-    { match: /pisa/i, photo: pisaPhoto, place: "Palazzo della Sapienza, Pisa" },
+    { photo: milanPhoto, place: "Ca’ Granda, Milan" },
+    { photo: pisaPhoto, place: "Palazzo della Sapienza, Pisa" },
     {
-      match: /sapienza/i,
       photo: romePhoto,
       place: "Sapienza University main campus, Rome",
     },
     {
-      match: /venice|venezia|foscari/i,
       photo: venicePhoto,
       place: "Ca’ Foscari, Venice",
       credit: "Freddo213, CC BY-SA 4.0",
     },
   ];
-
-const campusPhotoFor = (university: string) =>
-  campusPhotos.find((campus) => campus.match.test(university));
 
 // University badge: a campus photo when we have one, otherwise the coloured initials chip.
 function CampusMark({
@@ -303,8 +299,8 @@ function CampusMark({
       : `school-logo ${size === "small" ? "small" : ""}`;
   if (!campus) return <span className={`${className} ${tone}`}>{code}</span>;
   return (
-    <span className={`${className} campus-mark`}>
-      <Image src={campus.photo} alt={campus.place} fill sizes="64px" placeholder="blur" />
+    <span className={`${className} campus-mark`} title={`Photo: ${campus.author}, ${campus.license}`}>
+      <Image src={campus.photo} alt={campus.place} fill sizes="96px" placeholder="blur" />
     </span>
   );
 }
@@ -486,7 +482,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           <div className="story-card">
             <div className="story-match">
               <CampusMark
-                university="University of Bologna"
+                university="Università degli Studi di Bologna"
                 code="UB"
                 tone="red"
               />
@@ -1826,8 +1822,8 @@ function Overview({
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const capitalisedName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : "";
   // A different campus greets the team each day; the circles use two other campuses.
-  const heroCampus = campusPhotos[new Date().getDate() % campusPhotos.length];
-  const orbitCampuses = campusPhotos.filter((campus) => campus !== heroCampus && !campus.credit).slice(0, 2);
+  const heroCampus = heroCampuses[new Date().getDate() % heroCampuses.length];
+  const orbitCampuses = heroCampuses.filter((campus) => campus !== heroCampus && !campus.credit).slice(0, 2);
   const [placeName, placeCity] = heroCampus.place.split(", ");
   const activeStudents = students.filter((student) => student.status !== "archived");
   const eligible = matches.filter((match) => match.status === "Eligible");

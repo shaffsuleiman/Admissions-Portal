@@ -49,7 +49,9 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
         </div>
         <div className="site-shell site-footer-base">
           <small>© {new Date().getFullYear()} MatchED</small>
-          <small>University photos from Wikimedia Commons, credited on each page.</small>
+          <small>
+            University photos from Wikimedia Commons. <Link href="/credits">Photo credits</Link>
+          </small>
         </div>
       </footer>
     </div>
