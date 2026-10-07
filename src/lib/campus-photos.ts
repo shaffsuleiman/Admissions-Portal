@@ -14,8 +14,10 @@ import calabriaPhoto from "../../public/images/campus/u/calabria.jpg";
 import camerinoPhoto from "../../public/images/campus/u/camerino.jpg";
 import cataniaPhoto from "../../public/images/campus/u/catania.jpg";
 import catanzaroPhoto from "../../public/images/campus/u/catanzaro.jpg";
+import chietiEPescaraPhoto from "../../public/images/campus/u/chieti-e-pescara.jpg";
 import ferraraPhoto from "../../public/images/campus/u/ferrara.jpg";
 import firenzePhoto from "../../public/images/campus/u/firenze.jpg";
+import foggiaPhoto from "../../public/images/campus/u/foggia.jpg";
 import genovaPhoto from "../../public/images/campus/u/genova.jpg";
 import insubriaPhoto from "../../public/images/campus/u/insubria.jpg";
 import macerataPhoto from "../../public/images/campus/u/macerata.jpg";
@@ -23,6 +25,7 @@ import marchePhoto from "../../public/images/campus/u/marche.jpg";
 import messinaPhoto from "../../public/images/campus/u/messina.jpg";
 import milanoPhoto from "../../public/images/campus/u/milano.jpg";
 import milanoBicoccaPhoto from "../../public/images/campus/u/milano-bicocca.jpg";
+import milanoBocconiPhoto from "../../public/images/campus/u/milano-bocconi.jpg";
 import milanoCattolicaPhoto from "../../public/images/campus/u/milano-cattolica.jpg";
 import milanoIulmPhoto from "../../public/images/campus/u/milano-iulm.jpg";
 import milanoPolitecnicoPhoto from "../../public/images/campus/u/milano-politecnico.jpg";
@@ -30,10 +33,13 @@ import milanoSanRaffaelePhoto from "../../public/images/campus/u/milano-san-raff
 import modenaEReggioEmiliaPhoto from "../../public/images/campus/u/modena-e-reggio-emilia.jpg";
 import napoliFedericoIiPhoto from "../../public/images/campus/u/napoli-federico-ii.jpg";
 import napoliIiPhoto from "../../public/images/campus/u/napoli-ii.jpg";
+import napoliLOrientalePhoto from "../../public/images/campus/u/napoli-l-orientale.jpg";
 import napoliParthenopePhoto from "../../public/images/campus/u/napoli-parthenope.jpg";
 import padovaPhoto from "../../public/images/campus/u/padova.jpg";
+import palermoPhoto from "../../public/images/campus/u/palermo.jpg";
 import parmaPhoto from "../../public/images/campus/u/parma.jpg";
 import paviaPhoto from "../../public/images/campus/u/pavia.jpg";
+import perugiaPhoto from "../../public/images/campus/u/perugia.jpg";
 import piemonteOrientalePhoto from "../../public/images/campus/u/piemonte-orientale.jpg";
 import pisaPhoto from "../../public/images/campus/u/pisa.jpg";
 import reggioCalabriaPhoto from "../../public/images/campus/u/reggio-calabria.jpg";
@@ -42,8 +48,11 @@ import romaEuropeaPhoto from "../../public/images/campus/u/roma-europea.jpg";
 import romaForoItalicoPhoto from "../../public/images/campus/u/roma-foro-italico.jpg";
 import romaLinkCampusPhoto from "../../public/images/campus/u/roma-link-campus.jpg";
 import romaLuissPhoto from "../../public/images/campus/u/roma-luiss.jpg";
+import romaLumsaPhoto from "../../public/images/campus/u/roma-lumsa.jpg";
 import romaTorVergataPhoto from "../../public/images/campus/u/roma-tor-vergata.jpg";
 import romaTrePhoto from "../../public/images/campus/u/roma-tre.jpg";
+import rozzanoMiHumanitasUniversityPhoto from "../../public/images/campus/u/rozzano-mi-humanitas-university.jpg";
+import saintCamillusPhoto from "../../public/images/campus/u/Saint-Camillus.jpg";
 import salernoPhoto from "../../public/images/campus/u/salerno.jpg";
 import sapienzaPhoto from "../../public/images/campus/u/sapienza.jpg";
 import sassariPhoto from "../../public/images/campus/u/sassari.jpg";
@@ -193,6 +202,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     source: "https://commons.wikimedia.org/wiki/File:Magna_Graecia_University_of_Catanzaro_03.jpg",
   },
   {
+    slug: "chieti-e-pescara",
+    university: "Università degli studi Gabriele D'Annunzio di Chieti e Pescara",
+    otherNames: ["G. d'Annunzio University of Chieti-Pescara"],
+    photo: chietiEPescaraPhoto,
+    place: "Campus Unidav",
+    author: "ReM.92",
+    license: "Public domain",
+    source: "https://commons.wikimedia.org/wiki/File:Campus_Unidav.jpg",
+  },
+  {
     slug: "ferrara",
     university: "Università degli Studi di Ferrara",
     otherNames: ["University of Ferrara"],
@@ -211,6 +230,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     author: "sailko",
     license: "CC BY-SA 3.0",
     source: "https://commons.wikimedia.org/wiki/File:Rettorato_firenze,_aula_magna_02.JPG",
+  },
+  {
+    slug: "foggia",
+    university: "Università degli Studi di Foggia",
+    otherNames: ["University of Foggia"],
+    photo: foggiaPhoto,
+    place: "Emeroteca della Biblioteca Area Umanistica Unifg",
+    author: "Mattonella.t",
+    license: "CC BY-SA 4.0",
+    source: "https://commons.wikimedia.org/wiki/File:Emeroteca_della_Biblioteca_Area_Umanistica_Unifg.jpg",
   },
   {
     slug: "genova",
@@ -283,6 +312,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     source: "https://commons.wikimedia.org/wiki/File:U1_visto_da_piazza_della_Scienza,_Milano.jpg",
   },
   {
+    slug: "milano-bocconi",
+    university: "Università Commerciale Luigi Bocconi di Milano",
+    otherNames: ["Bocconi University"],
+    photo: milanoBocconiPhoto,
+    place: "Bocconi Grafton Building Milan",
+    author: "Paolo Gamba",
+    license: "CC BY 2.0",
+    source: "https://commons.wikimedia.org/wiki/File:Bocconi_Grafton_Building_Milan.jpg",
+  },
+  {
     slug: "milano-cattolica",
     university: "Università Cattolica del \"Sacro Cuore\"",
     otherNames: ["Università Cattolica del Sacro Cuore"],
@@ -353,6 +392,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     source: "https://commons.wikimedia.org/wiki/File:Chiostro_Dame.jpg",
   },
   {
+    slug: "napoli-l-orientale",
+    university: "Università degli studi L'Orientale di Napoli",
+    otherNames: ["University of Naples L'Orientale"],
+    photo: napoliLOrientalePhoto,
+    place: "Palazzo Giusso. Università degli Studi di Napoli. L'Orientale. (2977)",
+    author: "Giuseppe Guida",
+    license: "CC BY-SA 4.0",
+    source: "https://commons.wikimedia.org/wiki/File:Palazzo_Giusso._Universit%C3%A0_degli_Studi_di_Napoli._L%27Orientale._(2977).jpg",
+  },
+  {
     slug: "napoli-parthenope",
     university: "Università degli Studi di Napoli - Parthenope",
     otherNames: ["Parthenope University of Naples"],
@@ -373,6 +422,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     source: "https://commons.wikimedia.org/wiki/File:Palazzo_Bo_(Padua).jpg",
   },
   {
+    slug: "palermo",
+    university: "Università degli Studi di Palermo",
+    otherNames: ["University of Palermo"],
+    photo: palermoPhoto,
+    place: "Edificio 19 Unipa",
+    author: "Università degli Studi di Palermo",
+    license: "CC BY-SA 4.0",
+    source: "https://commons.wikimedia.org/wiki/File:Edificio_19_Unipa.jpg",
+  },
+  {
     slug: "parma",
     university: "Università degli Studi di Parma",
     otherNames: ["University of Parma"],
@@ -391,6 +450,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     author: "Giorgio Gonnella",
     license: "CC BY-SA 3.0",
     source: "https://commons.wikimedia.org/wiki/File:Aula_magna-University-Pavia-Italy.jpg",
+  },
+  {
+    slug: "perugia",
+    university: "Università degli Studi di Perugia",
+    otherNames: ["University of Perugia"],
+    photo: perugiaPhoto,
+    place: "Università degli Studi di Perugia",
+    author: "Umbria.ws",
+    license: "CC BY-SA 3.0",
+    source: "https://commons.wikimedia.org/wiki/File:Universit%C3%A0_degli_Studi_di_Perugia_-_panoramio.jpg",
   },
   {
     slug: "piemonte-orientale",
@@ -473,6 +542,16 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     source: "https://commons.wikimedia.org/wiki/File:LUISS_sede_centrale_Via_Pola.jpeg",
   },
   {
+    slug: "roma-lumsa",
+    university: "Libera Università Maria SS.Assunta - (LUMSA) di Roma",
+    otherNames: ["LUMSA University"],
+    photo: romaLumsaPhoto,
+    place: "Sede traspontina",
+    author: "vitasonline",
+    license: "Public domain",
+    source: "https://commons.wikimedia.org/wiki/File:Sede_traspontina.jpg",
+  },
+  {
     slug: "roma-tor-vergata",
     university: "Università degli Studi di Roma Tor Vergata",
     otherNames: ["University of Rome Tor Vergata"],
@@ -491,6 +570,26 @@ export const CAMPUS_PHOTOS: CampusPhoto[] = [
     author: "Lalupa",
     license: "CC BY-SA 3.0",
     source: "https://commons.wikimedia.org/wiki/File:Roma_3_Economia_01821-2.JPG",
+  },
+  {
+    slug: "rozzano-mi-humanitas-university",
+    university: "Humanitas University",
+    otherNames: [],
+    photo: rozzanoMiHumanitasUniversityPhoto,
+    place: "Humanitas University (2 dicembre 2021)",
+    author: "Terramargia",
+    license: "CC BY-SA 4.0",
+    source: "https://commons.wikimedia.org/wiki/File:Humanitas_University_(2_dicembre_2021).jpg",
+  },
+  {
+    slug: "Saint-Camillus",
+    university: "Saint Camillus International University of Health",
+    otherNames: ["UniCamillus Saint Camillus International University of Health Sciences"],
+    photo: saintCamillusPhoto,
+    place: "Campus Unicamillus",
+    author: "Eighthands",
+    license: "CC BY-SA 4.0",
+    source: "https://commons.wikimedia.org/wiki/File:Campus_Unicamillus.jpg",
   },
   {
     slug: "salerno",
