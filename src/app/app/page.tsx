@@ -36,6 +36,12 @@ import {
   draftProgrammeRules,
   extractDocument,
   loadWorkspaceData,
+  createWorkspace,
+  inviteMember,
+  invitePreview,
+  removeMember,
+  revokeInvite,
+  setMemberRole,
   researchStudentMatches,
   runStudentMatch,
   saveConfirmedProfile,
@@ -44,7 +50,10 @@ import {
   setDeadlineCompleted,
   updateApplicationStage,
   updateWorkspaceProfile,
+  type ActivityItem,
   type Application,
+  type PendingInvite,
+  type WorkspaceSummary,
   type DeadlineItem,
   type LiveResearchMatch,
   type LiveResearchResult,
@@ -70,6 +79,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   CircleAlert,
   CircleHelp,
   Clock3,
@@ -91,7 +101,6 @@ import {
   Mail,
   MapPin,
   Menu,
-  MoreHorizontal,
   PartyPopper,
   Plane,
   Plus,
@@ -329,6 +338,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
+  const [invite, setInvite] = useState<Awaited<ReturnType<typeof invitePreview>>>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
     text: string;
@@ -340,6 +350,26 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setMode(next);
     setMessage(null);
   };
+
+  // An invitation link (/app?invite=…) prefills the invited email and opens that workspace after sign-in.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("invite");
+    if (!token || !configured) return;
+    void invitePreview(token).then((preview) => {
+      if (!preview) {
+        setMessage({ text: "This invitation has expired or was revoked. Ask the person who invited you for a new link.", tone: "error" });
+        return;
+      }
+      setInvite(preview);
+      setEmail(preview.email);
+      setMode("signup");
+      try {
+        sessionStorage.setItem(INVITED_WORKSPACE_KEY, preview.workspaceId);
+      } catch {
+        // Private browsing: the invited workspace is still in the switcher.
+      }
+    });
+  }, [configured]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -484,13 +514,29 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </Link>
         </div>
         <div className="auth-box">
+          {invite && (
+            <p className="invite-banner">
+              <Users size={16} aria-hidden="true" />
+              <span>
+                You’ve been invited to join <b>{invite.workspaceName}</b> as{" "}
+                {(ROLE_LABELS[invite.role] ?? invite.role).toLowerCase()}.{" "}
+                {signingUp ? "Create your account with this email, or sign in if you already have one." : "Sign in with the invited email to join."}
+              </span>
+            </p>
+          )}
           <h2>
-            {signingUp ? "Create your workspace" : "Sign in to your workspace"}
+            {invite && signingUp
+              ? `Join ${invite.workspaceName}`
+              : signingUp
+                ? "Create your workspace"
+                : "Sign in to your workspace"}
           </h2>
           <p className="muted">
-            {signingUp
-              ? "Set up your consultancy’s account. You can invite counsellors once you’re in."
-              : "Continue managing students, applications, and deadlines."}
+            {invite && signingUp
+              ? "Set a password to accept the invitation."
+              : signingUp
+                ? "Set up your consultancy’s account. You can invite counsellors once you’re in."
+                : "Continue managing students, applications, and deadlines."}
           </p>
           <form onSubmit={submit}>
             {signingUp && (
@@ -508,19 +554,21 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                     />
                   </div>
                 </label>
-                <label>
-                  Consultancy name
-                  <div className="input-wrap">
-                    <Building2 size={17} />
-                    <input
-                      value={workspaceName}
-                      onChange={(event) => setWorkspaceName(event.target.value)}
-                      autoComplete="organization"
-                      placeholder="Your consultancy"
-                      required
-                    />
-                  </div>
-                </label>
+                {!invite && (
+                  <label>
+                    Consultancy name
+                    <div className="input-wrap">
+                      <Building2 size={17} />
+                      <input
+                        value={workspaceName}
+                        onChange={(event) => setWorkspaceName(event.target.value)}
+                        autoComplete="organization"
+                        placeholder="Your consultancy"
+                        required
+                      />
+                    </div>
+                  </label>
+                )}
               </>
             )}
             <label>
@@ -993,7 +1041,16 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
-    void loadWorkspaceData()
+    let invited: string | undefined;
+    try {
+      invited = sessionStorage.getItem(INVITED_WORKSPACE_KEY) ?? undefined;
+      sessionStorage.removeItem(INVITED_WORKSPACE_KEY);
+    } catch {
+      invited = undefined;
+    }
+    if (new URLSearchParams(window.location.search).has("invite"))
+      window.history.replaceState({}, "", "/app");
+    void loadWorkspaceData(invited)
       .then((workspaceData) => {
         if (!cancelled) setData(workspaceData);
       })
@@ -1130,6 +1187,9 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
 
   const {
     workspace,
+    workspaces,
+    invites,
+    activity,
     currentUser,
     team,
     students,
@@ -1156,7 +1216,29 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
       !deadline.completedAt &&
       new Date(deadline.dueAt).getTime() <= TODAY.getTime() + 7 * 86400000,
   ).length;
-  const workspaceInitial = workspace.name.charAt(0).toUpperCase() || "W";
+  const planLimit = PLAN_LIMITS[workspace.plan] ?? null;
+  const monthStart = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1).getTime();
+  const profilesThisMonth = students.filter((student) => Date.parse(student.createdAt) >= monthStart).length;
+  const switchWorkspace = async (workspaceId: string) => {
+    if (workspaceId === workspace.id) return;
+    setLoadingData(true);
+    try {
+      const next = await loadWorkspaceData(workspaceId);
+      setData(next);
+      navigate("Overview");
+      notify(`Switched to ${next.workspace.name}`);
+    } catch (error) {
+      notify(messageOf(error) ?? "Could not open that workspace");
+    } finally {
+      setLoadingData(false);
+    }
+  };
+  const addWorkspace = async (name: string) => {
+    const workspaceId = await createWorkspace(name);
+    setData(await loadWorkspaceData(workspaceId));
+    navigate("Overview");
+    notify(`${name.trim()} is ready`);
+  };
 
   return (
     <main className="product-shell">
@@ -1178,14 +1260,12 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             <X size={19} />
           </button>
         </div>
-        <button className="workspace-card">
-          <span className="workspace-avatar">{workspaceInitial}</span>
-          <span>
-            <small>WORKSPACE</small>
-            <strong>{workspace.name}</strong>
-          </span>
-          <ChevronDown size={15} />
-        </button>
+        <WorkspaceSwitcher
+          current={workspace}
+          workspaces={workspaces}
+          onSwitch={switchWorkspace}
+          onCreate={addWorkspace}
+        />
         <nav aria-label="Main">
           {navGroups.map((group) => (
             <div className="nav-group" key={group.label}>
@@ -1230,13 +1310,14 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             <div>
               <span>MONTHLY PROFILES</span>
               <strong>
-                {students.length} <small>/ 30 used</small>
+                {profilesThisMonth}{" "}
+                <small>{planLimit == null ? "added this month" : `/ ${planLimit} this month`}</small>
               </strong>
             </div>
             <div className="usage-track">
               <span
                 style={{
-                  width: `${Math.min((students.length / 30) * 100, 100)}%`,
+                  width: planLimit == null ? "100%" : `${Math.min((profilesThisMonth / planLimit) * 100, 100)}%`,
                 }}
               />
             </div>
@@ -1244,22 +1325,12 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               View plan <ArrowRight size={13} />
             </button>
           </div>
-          <button
-            className="user-card"
-            onClick={() => openSettings("Workspace profile")}
-          >
-            <span className={`avatar ${currentUser.tone}`}>
-              {currentUser.initials}
-            </span>
-            <span>
-              <strong>{currentUser.name}</strong>
-              <small>{currentUser.role} counsellor</small>
-            </span>
-            <MoreHorizontal size={16} />
-          </button>
-          <button className="logout-button" onClick={onLogout}>
-            <LogOut size={15} /> Sign out
-          </button>
+          <AccountMenu
+            user={currentUser}
+            onSettings={() => openSettings("Workspace profile")}
+            onHelp={openTutorial}
+            onLogout={onLogout}
+          />
         </div>
       </aside>
 
@@ -1306,13 +1377,13 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               <span>Help &amp; tour</span>
               <kbd>?</kbd>
             </button>
-            <button
-              className="icon-button notification"
-              aria-label="Notifications"
-            >
-              <Bell size={18} />
-              {dueThisWeek > 0 && <i />}
-            </button>
+            <NotificationsMenu
+              workspace={workspace}
+              deadlines={deadlines}
+              students={students}
+              onOpenCalendar={() => navigate("Calendar")}
+              onOpenStudent={(student) => setSelectedStudent(student)}
+            />
             <div
               className={`top-avatar avatar ${currentUser.tone}`}
               aria-hidden="true"
@@ -1322,6 +1393,11 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
           </div>
         </header>
         <div className="page-wrap">
+          {currentUser.role === "viewer" && (
+            <p className="viewer-notice" role="status">
+              <Eye size={15} aria-hidden="true" /> You have view-only access to {workspace.name}. Ask an admin if you need to make changes.
+            </p>
+          )}
           {view === "Overview" && (
             <Overview
               students={students}
@@ -1422,7 +1498,15 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             />
           )}
           {view === "Team" && (
-            <TeamView team={team} workspace={workspace} onNotify={notify} />
+            <TeamView
+              team={team}
+              workspace={workspace}
+              currentUser={currentUser}
+              invites={invites}
+              activity={activity}
+              onChanged={refresh}
+              onNotify={notify}
+            />
           )}
           {view === "Settings" && (
             <SettingsView
@@ -1430,7 +1514,10 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
               initialSection={settingsSection}
               workspace={workspace}
               user={currentUser}
-              studentCount={students.length}
+              studentCount={profilesThisMonth}
+              programmeCount={programmes.length}
+              universityCount={new Set(programmes.map((programme) => programme.universityId ?? programme.university)).size}
+              onExport={() => exportStudents(students, notify)}
               onSave={async (nextWorkspace, fullName) => {
                 await updateWorkspaceProfile(nextWorkspace, fullName);
                 await refresh();
@@ -2347,6 +2434,343 @@ function ProgressChart({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Remembers which workspace an invitation link pointed at, so it opens after sign-in. */
+const INVITED_WORKSPACE_KEY = "matched.invitedWorkspace";
+
+const PLAN_LABELS: Record<string, string> = {
+  trial: "Trial",
+  starter: "Starter",
+  growth: "Growth",
+  enterprise: "Enterprise",
+};
+
+/** Lists every workspace this person belongs to, opens one, or creates a new one. */
+function WorkspaceSwitcher({
+  current,
+  workspaces,
+  onSwitch,
+  onCreate,
+}: {
+  current: Workspace;
+  workspaces: WorkspaceSummary[];
+  onSwitch: (workspaceId: string) => Promise<void>;
+  onCreate: (name: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+  const close = () => {
+    setOpen(false);
+    setCreating(false);
+    setName("");
+    setError("");
+  };
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) close();
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    if (name.trim().length < 2) return setError("Use at least 2 characters.");
+    setBusy(true);
+    setError("");
+    try {
+      await onCreate(name);
+      close();
+    } catch (caught) {
+      setError(messageOf(caught) ?? "Could not create the workspace.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="switcher" ref={root}>
+      <button
+        className="workspace-card"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => (open ? close() : setOpen(true))}
+      >
+        <span className="workspace-avatar">{current.name.charAt(0).toUpperCase() || "W"}</span>
+        <span>
+          <small>WORKSPACE</small>
+          <strong>{current.name}</strong>
+        </span>
+        <ChevronsUpDown size={15} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="switcher-menu" role="menu" aria-label="Workspaces">
+          <p className="switcher-label">Your workspaces</p>
+          {workspaces.map((item) => (
+            <button
+              key={item.id}
+              role="menuitemradio"
+              aria-checked={item.id === current.id}
+              className="switcher-item"
+              onClick={() => {
+                close();
+                void onSwitch(item.id);
+              }}
+            >
+              <span className="workspace-avatar">{item.name.charAt(0).toUpperCase() || "W"}</span>
+              <span>
+                <strong>{item.name}</strong>
+                <small>
+                  {ROLE_LABELS[item.role] ?? item.role} · {PLAN_LABELS[item.plan] ?? item.plan} plan
+                </small>
+              </span>
+              {item.id === current.id ? <Check size={15} aria-hidden="true" /> : null}
+            </button>
+          ))}
+          {creating ? (
+            <form className="switcher-create-form" onSubmit={create}>
+              <label>
+                <span className="sr-only">New workspace name</span>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Consultancy or branch name"
+                  maxLength={80}
+                />
+              </label>
+              {error && <small className="switcher-error">{error}</small>}
+              <div>
+                <button type="button" className="secondary-button" onClick={() => setCreating(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="primary-button" disabled={busy}>
+                  {busy ? <span className="spinner" /> : null} Create
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button className="switcher-create" onClick={() => setCreating(true)}>
+              <Plus size={15} /> Create workspace
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The bell: overdue deadlines, deadlines this week and profiles waiting for review. */
+function NotificationsMenu({
+  workspace,
+  deadlines,
+  students,
+  onOpenCalendar,
+  onOpenStudent,
+}: {
+  workspace: Workspace;
+  deadlines: DeadlineItem[];
+  students: Student[];
+  onOpenCalendar: () => void;
+  onOpenStudent: (student: Student) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+  const pending = deadlines.filter((deadline) => !deadline.completedAt);
+  const overdue = notificationSetting(workspace, "overdue")
+    ? pending.filter((deadline) => daysUntil(deadline.dueAt) < 0)
+    : [];
+  const upcoming = notificationSetting(workspace, "upcoming")
+    ? pending.filter((deadline) => daysUntil(deadline.dueAt) >= 0 && daysUntil(deadline.dueAt) <= 7)
+    : [];
+  const reviews = notificationSetting(workspace, "reviews")
+    ? students.filter((student) => ["needs_review", "profile_processing"].includes(student.status))
+    : [];
+  const count = overdue.length + upcoming.length + reviews.length;
+  const deadlineLine = (deadline: DeadlineItem) =>
+    [deadline.university, deadline.studentName].filter(Boolean).join(" · ");
+  return (
+    <div className="notifications" ref={root}>
+      <button
+        className="icon-button notification"
+        aria-label={count ? `Notifications, ${count} new` : "Notifications"}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Bell size={18} />
+        {count > 0 && <i />}
+      </button>
+      {open && (
+        <div className="notifications-panel" role="dialog" aria-label="Notifications">
+          <header>
+            <strong>Notifications</strong>
+            <small>{count ? plural(count, "item") : "All clear"}</small>
+          </header>
+          {!count && (
+            <p className="notifications-empty">
+              <CheckCircle2 size={18} /> No overdue deadlines, nothing due this week and no profiles waiting.
+            </p>
+          )}
+          {overdue.map((deadline) => (
+            <button
+              key={`overdue-${deadline.id}`}
+              className="notification-item is-overdue"
+              onClick={() => {
+                setOpen(false);
+                onOpenCalendar();
+              }}
+            >
+              <CircleAlert size={16} />
+              <span>
+                <strong>{deadline.title} is overdue</strong>
+                <small>
+                  {deadlineLine(deadline)} · was due {plural(Math.abs(daysUntil(deadline.dueAt)), "day")} ago
+                </small>
+              </span>
+            </button>
+          ))}
+          {upcoming.map((deadline) => (
+            <button
+              key={`upcoming-${deadline.id}`}
+              className="notification-item"
+              onClick={() => {
+                setOpen(false);
+                onOpenCalendar();
+              }}
+            >
+              <CalendarDays size={16} />
+              <span>
+                <strong>{deadline.title}</strong>
+                <small>
+                  {deadlineLine(deadline)} ·{" "}
+                  {daysUntil(deadline.dueAt) === 0 ? "due today" : `due in ${plural(daysUntil(deadline.dueAt), "day")}`}
+                </small>
+              </span>
+            </button>
+          ))}
+          {reviews.map((student) => (
+            <button
+              key={`review-${student.id}`}
+              className="notification-item"
+              onClick={() => {
+                setOpen(false);
+                onOpenStudent(student);
+              }}
+            >
+              <ShieldCheck size={16} />
+              <span>
+                <strong>Review {student.name}’s profile</strong>
+                <small>Confirm the academic details so matching can run</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Workspace admin",
+  manager: "Manager",
+  counsellor: "Counsellor",
+  viewer: "Viewer",
+};
+
+/** The signed-in person, with their role, and a menu for settings, help and signing out. */
+function AccountMenu({
+  user,
+  onSettings,
+  onHelp,
+  onLogout,
+}: {
+  user: TeamMember;
+  onSettings: () => void;
+  onHelp: () => void;
+  onLogout: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+  const choose = (action: () => void) => () => {
+    setOpen(false);
+    action();
+  };
+  return (
+    <div className="account" ref={root}>
+      {open && (
+        <div className="account-menu" role="menu" aria-label="Account">
+          <div className="account-menu-head">
+            <strong>{user.name}</strong>
+            <small>{user.email}</small>
+          </div>
+          <button role="menuitem" onClick={choose(onSettings)}>
+            <Settings size={16} /> Profile and workspace settings
+          </button>
+          <button role="menuitem" onClick={choose(onHelp)}>
+            <CircleHelp size={16} /> Help and product tour
+          </button>
+          <button role="menuitem" className="is-danger" onClick={choose(onLogout)}>
+            <LogOut size={16} /> Sign out
+          </button>
+        </div>
+      )}
+      <button
+        className="account-card"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className={`avatar ${user.tone}`}>{user.initials}</span>
+        <span className="account-text">
+          <strong>{user.name}</strong>
+          <small>{ROLE_LABELS[user.role] ?? user.role}</small>
+        </span>
+        <ChevronsUpDown size={16} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -4411,10 +4835,11 @@ function ReportsView({
   deadlines: DeadlineItem[];
   onNotify: (message: string) => void;
 }) {
+  const [monthCount, setMonthCount] = useState(6);
   const monthDates = Array.from(
-    { length: 6 },
+    { length: monthCount },
     (_, index) =>
-      new Date(TODAY.getFullYear(), TODAY.getMonth() - 5 + index, 1),
+      new Date(TODAY.getFullYear(), TODAY.getMonth() - (monthCount - 1) + index, 1),
   );
   const months = monthDates.map((date) =>
     date.toLocaleDateString("en-GB", { month: "short" }),
@@ -4535,7 +4960,15 @@ function ReportsView({
             <div>
               <h2>Students matched</h2>
             </div>
-            <span className="outline-button">Last 6 months</span>
+            <label className="lively-range">
+              <span className="sr-only">Chart range</span>
+              <select value={monthCount} onChange={(event) => setMonthCount(Number(event.target.value))}>
+                <option value={3}>Last 3 months</option>
+                <option value={6}>Last 6 months</option>
+                <option value={12}>Last 12 months</option>
+              </select>
+              <ChevronDown size={14} aria-hidden="true" />
+            </label>
           </div>
           <div className="bar-chart">
             <div className="y-labels">
@@ -4603,27 +5036,125 @@ function ReportsView({
   );
 }
 
+/** "just now", "5 minutes ago", "3 days ago". */
+function ago(iso: string | null | undefined) {
+  if (!iso) return null;
+  const minutes = Math.round((TODAY.getTime() - Date.parse(iso)) / 60000);
+  if (Number.isNaN(minutes)) return null;
+  if (minutes < 5) return "just now";
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} ${days === 1 ? "day" : "days"} ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const ROLE_HELP: Record<string, string> = {
+  admin: "Everything, including members, roles and billing",
+  manager: "Manages counsellors and viewers, and all student work",
+  counsellor: "Adds students, runs matches and manages applications",
+  viewer: "Can see students and matches but not change them",
+};
+
+/** One readable line per activity record. */
+function describeActivity(item: ActivityItem) {
+  const meta = item.metadata;
+  const role = (value: unknown) => (ROLE_LABELS[String(value)] ?? String(value ?? "")).toLowerCase();
+  switch (item.action) {
+    case "member.invited":
+      return `invited ${meta.email} as ${role(meta.role)}`;
+    case "member.joined":
+      return `joined as ${role(meta.role)}`;
+    case "member.role_changed":
+      return `changed a member’s role from ${role(meta.from)} to ${role(meta.to)}`;
+    case "member.removed":
+      return "removed a member";
+    case "member.left":
+      return "left the workspace";
+    case "matches.generated":
+      return `ran matching against ${meta.programme_count ?? "the"} programmes`;
+    default:
+      return item.action.replaceAll("_", " ").replace(".", " ");
+  }
+}
+
 function TeamView({
   team,
   workspace,
+  currentUser,
+  invites,
+  activity,
+  onChanged,
   onNotify,
 }: {
   team: TeamMember[];
   workspace: Workspace;
+  currentUser: TeamMember;
+  invites: PendingInvite[];
+  activity: ActivityItem[];
+  onChanged: () => Promise<unknown>;
   onNotify: (message: string) => void;
 }) {
+  const isAdmin = currentUser.role === "admin";
+  const canManage = isAdmin || currentUser.role === "manager";
+  const adminCount = team.filter((member) => member.role === "admin").length;
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("counsellor");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [lastLink, setLastLink] = useState<{ email: string; link: string } | null>(null);
+  const [busyMember, setBusyMember] = useState("");
+  const linkFor = (token: string) => `${window.location.origin}/app?invite=${token}`;
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onNotify("Invitation link copied");
+    } catch {
+      onNotify("Copy failed. Select the link and copy it manually.");
+    }
+  };
+  const invite = async (event: FormEvent) => {
+    event.preventDefault();
+    setInviteError("");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      return setInviteError("Enter a valid email address.");
+    setInviting(true);
+    try {
+      const token = await inviteMember(workspace.id, email, role);
+      setLastLink({ email: email.trim(), link: linkFor(token) });
+      setEmail("");
+      await onChanged();
+      onNotify(`Invitation created for ${email.trim()}`);
+    } catch (error) {
+      setInviteError(messageOf(error) ?? "Could not create the invitation.");
+    } finally {
+      setInviting(false);
+    }
+  };
+  const act = async (memberId: string, action: () => Promise<void>, done: string) => {
+    setBusyMember(memberId);
+    try {
+      await action();
+      await onChanged();
+      onNotify(done);
+    } catch (error) {
+      onNotify(messageOf(error) ?? "That change was not allowed.");
+    } finally {
+      setBusyMember("");
+    }
+  };
+  const roleOptions = (memberRole: string) =>
+    Object.keys(ROLE_LABELS).filter((option) => isAdmin || (option !== "admin" && memberRole !== "admin"));
   return (
     <>
-      <PageTitle
-        title="Team"
-        text={`Members with access to ${workspace.name}.`}
-      >
+      <PageTitle title="Team" text={`People with access to ${workspace.name}, and what they can do.`}>
         <button
           className="secondary-button"
           onClick={() => {
             downloadCsv("team-members.csv", [
-              ["Name", "Email", "Role"],
-              ...team.map((member) => [member.name, member.email, member.role]),
+              ["Name", "Email", "Role", "Last active"],
+              ...team.map((member) => [member.name, member.email, ROLE_LABELS[member.role] ?? member.role, ago(member.lastSeenAt) ?? "Never"]),
             ]);
             onNotify("Team list exported");
           }}
@@ -4632,58 +5163,222 @@ function TeamView({
         </button>
       </PageTitle>
       <div className="team-grid">
-        <div className="panel member-panel">
-          <div className="panel-head">
-            <div>
-              <h2>Team members</h2>
-              <p>
-                {team.length} active {team.length === 1 ? "member" : "members"}
-              </p>
-            </div>
-          </div>
-          {team.map((member) => (
-            <div className="member-row" key={member.id}>
-              <span className={`avatar ${member.tone}`}>{member.initials}</span>
-              <div>
-                <strong>{member.name}</strong>
-                <small>{member.email}</small>
+        <div className="team-main">
+          {canManage && (
+            <div className="panel invite-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Invite a colleague</h2>
+                  <p className="panel-sub">
+                    They join this workspace when they sign up or next sign in with this email.
+                  </p>
+                </div>
               </div>
-              <span className="role-pill">{member.role}</span>
-              <span className="last-active">
-                <i />
-                Active
-              </span>
+              <form className="invite-form" onSubmit={invite}>
+                <label>
+                  <span>Work email</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="colleague@consultancy.com"
+                    autoComplete="off"
+                  />
+                </label>
+                <label>
+                  <span>Role</span>
+                  <select value={role} onChange={(event) => setRole(event.target.value)}>
+                    {Object.keys(ROLE_LABELS)
+                      .filter((option) => isAdmin || option !== "admin")
+                      .map((option) => (
+                        <option key={option} value={option}>
+                          {ROLE_LABELS[option]}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button className="primary-button" type="submit" disabled={inviting}>
+                  {inviting ? <span className="spinner" /> : <UserPlus size={16} />} Invite
+                </button>
+              </form>
+              <p className="invite-role-help">{ROLE_HELP[role]}</p>
+              {inviteError && <p className="auth-message error" role="alert">{inviteError}</p>}
+              {lastLink && (
+                <div className="invite-link" role="status">
+                  <span>
+                    Send {lastLink.email} this link. If they already have an account, they have been added straight away.
+                  </span>
+                  <div>
+                    <input readOnly value={lastLink.link} aria-label="Invitation link" onFocus={(event) => event.target.select()} />
+                    <button className="secondary-button" type="button" onClick={() => void copy(lastLink.link)}>
+                      Copy link
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-          {!team.length && (
-            <div className="empty-state">
-              <Users size={24} />
-              <strong>No team members found</strong>
-              <span>Workspace membership records will appear here.</span>
+          )}
+
+          <div className="panel member-panel">
+            <div className="panel-head">
+              <div>
+                <h2>Members</h2>
+                <p className="panel-sub">{plural(team.length, "person", "people")} in this workspace</p>
+              </div>
+            </div>
+            {team.map((member) => {
+              const isMe = member.id === currentUser.id;
+              // A workspace always keeps one admin, so the last one can't step down or leave.
+              const lastAdmin = member.role === "admin" && adminCount === 1;
+              const canEditRole = !lastAdmin && canManage && (isAdmin || member.role !== "admin");
+              const canRemove = !lastAdmin && (isMe || (canManage && (isAdmin || !["admin", "manager"].includes(member.role))));
+              const lastSeen = ago(member.lastSeenAt);
+              return (
+                <div className="member-row" key={member.id}>
+                  <span className={`avatar ${member.tone}`}>{member.initials}</span>
+                  <div className="member-text">
+                    <strong>
+                      {member.name}
+                      {isMe ? <i className="member-you">You</i> : null}
+                    </strong>
+                    <small>{member.email}</small>
+                  </div>
+                  {canEditRole ? (
+                    <label className="member-role">
+                      <span className="sr-only">Role for {member.name}</span>
+                      <select
+                        value={member.role}
+                        disabled={busyMember === member.id}
+                        onChange={(event) =>
+                          void act(
+                            member.id,
+                            () => setMemberRole(workspace.id, member.id, event.target.value),
+                            `${member.name} is now ${ROLE_LABELS[event.target.value] ?? event.target.value}`,
+                          )
+                        }
+                      >
+                        {roleOptions(member.role).map((option) => (
+                          <option key={option} value={option}>
+                            {ROLE_LABELS[option]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <span
+                      className="role-pill"
+                      title={lastAdmin ? "Make someone else a workspace admin before changing this role" : undefined}
+                    >
+                      {ROLE_LABELS[member.role] ?? member.role}
+                    </span>
+                  )}
+                  <span className={`last-active ${lastSeen === "just now" ? "is-now" : ""}`}>
+                    {lastSeen ? (lastSeen === "just now" ? "Active now" : `Active ${lastSeen}`) : "Not signed in yet"}
+                  </span>
+                  {canRemove ? (
+                    <button
+                      className="member-remove"
+                      disabled={busyMember === member.id}
+                      onClick={() => {
+                        const question = isMe
+                          ? `Leave ${workspace.name}? You will lose access to its students.`
+                          : `Remove ${member.name} from ${workspace.name}?`;
+                        if (!window.confirm(question)) return;
+                        void act(
+                          member.id,
+                          () => removeMember(workspace.id, member.id),
+                          isMe ? `You left ${workspace.name}` : `${member.name} was removed`,
+                        );
+                      }}
+                    >
+                      {isMe ? "Leave" : "Remove"}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {canManage && invites.length > 0 && (
+            <div className="panel member-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Pending invitations</h2>
+                  <p className="panel-sub">Links stay valid for 14 days.</p>
+                </div>
+              </div>
+              {invites.map((pending) => {
+                const daysLeft = Math.max(0, Math.round((Date.parse(pending.expiresAt) - TODAY.getTime()) / 86400000));
+                return (
+                  <div className="member-row invite-row" key={pending.id}>
+                    <span className="avatar">
+                      <Mail size={16} />
+                    </span>
+                    <div className="member-text">
+                      <strong>{pending.email}</strong>
+                      <small>
+                        {ROLE_LABELS[pending.role] ?? pending.role} · expires in {plural(daysLeft, "day")}
+                      </small>
+                    </div>
+                    <button className="secondary-button" onClick={() => void copy(linkFor(pending.token))}>
+                      Copy link
+                    </button>
+                    <button
+                      className="member-remove"
+                      disabled={busyMember === pending.id}
+                      onClick={() => void act(pending.id, () => revokeInvite(pending.id), `Invitation for ${pending.email} revoked`)}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-        <div className="panel access-panel">
-          <div className="access-icon">
-            <ShieldCheck size={21} />
+
+        <aside className="team-side">
+          <div className="panel activity-panel">
+            <div className="panel-head">
+              <div>
+                <h2>Recent activity</h2>
+                <p className="panel-sub">The latest changes in this workspace.</p>
+              </div>
+            </div>
+            {activity.length ? (
+              <ol className="activity-list">
+                {activity.map((item) => (
+                  <li key={item.id}>
+                    <span className="activity-dot" aria-hidden="true" />
+                    <p>
+                      <strong>{item.actorName}</strong> {describeActivity(item)}
+                    </p>
+                    <time dateTime={item.createdAt}>{ago(item.createdAt)}</time>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="empty-state">
+                <Clock3 size={22} />
+                <strong>No activity yet</strong>
+                <span>Invites, matches and role changes will appear here.</span>
+              </div>
+            )}
           </div>
-          <h2>Student data stays isolated</h2>
-          <p>
-            Role-based permissions and workspace isolation keep each
-            consultancy’s records private.
-          </p>
-          <ul>
-            <li>
-              <Check size={14} /> Manager and counsellor roles
-            </li>
-            <li>
-              <Check size={14} /> Workspace-scoped row-level security
-            </li>
-            <li>
-              <Check size={14} /> Full activity log
-            </li>
-          </ul>
-        </div>
+          <div className="panel access-panel">
+            <h2>What each role can do</h2>
+            <ul className="role-guide">
+              {Object.keys(ROLE_LABELS).map((option) => (
+                <li key={option}>
+                  <strong>{ROLE_LABELS[option]}</strong>
+                  <span>{ROLE_HELP[option]}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
       </div>
     </>
   );
@@ -4698,106 +5393,76 @@ const settingsSections = [
 ] as const;
 type SettingsSection = (typeof settingsSections)[number];
 
-const settingsToggles: Record<
-  Exclude<SettingsSection, "Workspace profile" | "Subscription">,
-  {
-    group: string;
-    intro: string;
-    toggles: {
-      key: string;
-      title: string;
-      detail: string;
-      fallback: boolean;
-    }[];
-  }
+const settingsToggles: Partial<
+  Record<
+    SettingsSection,
+    {
+      group: string;
+      intro: string;
+      toggles: { key: string; title: string; detail: string; fallback: boolean }[];
+    }
+  >
 > = {
-  Destinations: {
-    group: "destinations",
-    intro: "Choose which countries appear in matching and programme search.",
-    toggles: [
-      {
-        key: "Italy",
-        title: "Italy",
-        detail: "Verified programmes · 2027/28 intake",
-        fallback: true,
-      },
-      {
-        key: "Germany",
-        title: "Germany",
-        detail: "Programme data in verification",
-        fallback: true,
-      },
-      {
-        key: "France",
-        title: "France",
-        detail: "Available on request",
-        fallback: false,
-      },
-    ],
-  },
   Notifications: {
     group: "notifications",
-    intro: "Decide when counsellors hear about deadlines and profile changes.",
+    intro: "Choose what the bell in the top bar shows for this workspace.",
     toggles: [
       {
-        key: "deadline_reminders",
-        title: "Deadline reminders",
-        detail:
-          "Email assigned counsellors 14, 7, and 2 days before a deadline",
+        key: "overdue",
+        title: "Overdue deadlines",
+        detail: "Deadlines whose date has passed and are not marked done",
         fallback: true,
       },
       {
-        key: "profile_ready",
-        title: "Profile ready for review",
-        detail: "Notify when document extraction finishes",
+        key: "upcoming",
+        title: "Deadlines this week",
+        detail: "Deadlines due in the next 7 days",
         fallback: true,
       },
       {
-        key: "weekly_summary",
-        title: "Weekly activity summary",
-        detail: "Send a Monday digest to workspace admins",
-        fallback: false,
-      },
-    ],
-  },
-  "Privacy & data": {
-    group: "privacy",
-    intro: "Control how long student records and documents are kept.",
-    toggles: [
-      {
-        key: "require_consent",
-        title: "Require consent before processing",
-        detail: "Block document upload until consent is recorded",
-        fallback: true,
-      },
-      {
-        key: "auto_delete_inactive",
-        title: "Auto-delete inactive students",
-        detail: "Remove records with no activity for 24 months",
-        fallback: false,
-      },
-      {
-        key: "activity_log",
-        title: "Activity log",
-        detail: "Record who viewed or edited each student profile",
+        key: "reviews",
+        title: "Profiles waiting for review",
+        detail: "Students whose documents are read but not yet confirmed",
         fallback: true,
       },
     ],
   },
 };
 
+/** Monthly student profiles included in each plan (null means unlimited). */
+const PLAN_LIMITS: Record<string, number | null> = {
+  trial: 10,
+  starter: 30,
+  growth: 150,
+  enterprise: null,
+};
+
+/** The bell's switches live in workspace settings; missing values default to on. */
+function notificationSetting(workspace: Workspace, key: string) {
+  const group = workspace.settings.notifications;
+  if (group && typeof group === "object" && key in group) return Boolean((group as Record<string, unknown>)[key]);
+  return true;
+}
+
 function SettingsView({
   initialSection,
   workspace,
   user,
   studentCount,
+  programmeCount,
+  universityCount,
+  onExport,
   onSave,
   onNotify,
 }: {
   initialSection: SettingsSection;
   workspace: Workspace;
   user: TeamMember;
+  /** Student profiles added this calendar month. */
   studentCount: number;
+  programmeCount: number;
+  universityCount: number;
+  onExport: () => void;
   onSave: (workspace: Workspace, fullName: string) => Promise<void>;
   onNotify: (message: string) => void;
 }) {
@@ -4810,10 +5475,8 @@ function SettingsView({
     setFullName(user.name);
     onNotify("Changes discarded");
   };
-  const toggles =
-    section in settingsToggles
-      ? settingsToggles[section as keyof typeof settingsToggles]
-      : null;
+  const toggles = settingsToggles[section] ?? null;
+  const limit = PLAN_LIMITS[draft.plan] ?? null;
   const toggleValue = (group: string, key: string, fallback: boolean) => {
     const values = draft.settings[group];
     return values && typeof values === "object" && key in values
@@ -4949,7 +5612,7 @@ function SettingsView({
             </>
           )}
           {toggles && (
-            <div className="settings-placeholder">
+            <div className="settings-toggles">
               <p>{toggles.intro}</p>
               {toggles.toggles.map((toggle) => (
                 <label className="toggle-row" key={toggle.key}>
@@ -4976,29 +5639,70 @@ function SettingsView({
             <div className="plan-card">
               <div>
                 <h3>
-                  {draft.plan.charAt(0).toUpperCase() + draft.plan.slice(1)} plan ·
-                  30 profiles / month
+                  {PLAN_LABELS[draft.plan] ?? draft.plan} plan ·{" "}
+                  {limit == null ? "unlimited profiles" : `${limit} profiles a month`}
                 </h3>
-                <p>Workspace billing plan</p>
+                <p>
+                  To change plan, <a href="/book?plan=growth">book a call</a> and we will move your workspace over.
+                </p>
               </div>
               <div className="plan-usage">
                 <span>
-                  <b>{studentCount}</b> of 30 profiles used
+                  <b>{studentCount}</b> {limit == null ? "profiles added this month" : `of ${limit} profiles used this month`}
                 </span>
-                <div className="usage-track">
-                  <span
-                    style={{
-                      width: `${Math.min((studentCount / 30) * 100, 100)}%`,
-                    }}
-                  />
-                </div>
-                <small>
-                  {Math.max(30 - studentCount, 0)} profiles remaining
-                </small>
+                {limit != null && (
+                  <>
+                    <div className="usage-track">
+                      <span style={{ width: `${Math.min((studentCount / limit) * 100, 100)}%` }} />
+                    </div>
+                    <small>{plural(Math.max(limit - studentCount, 0), "profile")} remaining this month</small>
+                  </>
+                )}
               </div>
             </div>
           )}
-          {section !== "Subscription" && (
+          {section === "Destinations" && (
+            <div className="settings-info">
+              <p>MatchED matches students against English-taught programmes in Italy.</p>
+              <div className="destination-row">
+                <strong>Italy</strong>
+                <span>
+                  {programmeCount} programmes at {universityCount} universities, each linked to its official page
+                </span>
+                <span className="status green">
+                  <i />
+                  Active
+                </span>
+              </div>
+              <p className="settings-note">Other countries are not in the catalogue yet, so they are not offered for matching.</p>
+            </div>
+          )}
+          {section === "Privacy & data" && (
+            <div className="settings-info">
+              <ul className="privacy-facts">
+                <li>
+                  <strong>Consent first</strong>
+                  <span>A student’s consent must be recorded before any document can be uploaded.</span>
+                </li>
+                <li>
+                  <strong>Private to this workspace</strong>
+                  <span>Student records, documents and matches are only visible to members of {draft.name}.</span>
+                </li>
+                <li>
+                  <strong>Activity is recorded</strong>
+                  <span>Invites, role changes and match runs appear in the Team page’s activity feed.</span>
+                </li>
+                <li>
+                  <strong>Deleting a student</strong>
+                  <span>Removes their profile, documents, matches and applications from the workspace.</span>
+                </li>
+              </ul>
+              <button className="secondary-button" onClick={onExport}>
+                <Download size={16} /> Export all student records
+              </button>
+            </div>
+          )}
+          {(section === "Workspace profile" || section === "Notifications") && (
             <footer>
               <button className="secondary-button" onClick={discard}>
                 Discard
@@ -5410,7 +6114,7 @@ function NewStudentWizard({
   const [schoolPercent, setSchoolPercent] = useState("");
   const [budget, setBudget] = useState("");
   const [english, setEnglish] = useState("");
-  const [country, setCountry] = useState("Italy");
+  const country = "Italy";
   const [intake, setIntake] = useState(DEFAULT_INTAKE);
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -5720,15 +6424,8 @@ function NewStudentWizard({
                 )}
                 <label>
                   Target country
-                  <select
-                    value={country}
-                    onChange={(event) => setCountry(event.target.value)}
-                  >
-                    <option>Italy</option>
-                    <option>Germany</option>
-                    <option>France</option>
-                    <option>Hungary</option>
-                  </select>
+                  <input value="Italy" readOnly aria-describedby="country-note" />
+                  <small id="country-note" className="field-hint">The programme catalogue covers Italy.</small>
                 </label>
                 <label>
                   Target intake

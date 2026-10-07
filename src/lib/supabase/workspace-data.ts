@@ -29,6 +29,29 @@ export type TeamMember = {
   role: string;
   initials: string;
   tone: string;
+  lastSeenAt?: string | null;
+  joinedAt?: string | null;
+};
+
+/** A workspace this person belongs to, for the switcher. */
+export type WorkspaceSummary = { id: string; name: string; role: string; plan: string };
+
+export type PendingInvite = {
+  id: string;
+  email: string;
+  role: string;
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type ActivityItem = {
+  id: string;
+  actorName: string;
+  action: string;
+  entityType: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 };
 
 export type StudentDocument = {
@@ -242,8 +265,12 @@ export type NewDeadlineInput = {
 
 export type WorkspaceData = {
   workspace: Workspace;
+  /** Every workspace this person belongs to; the one above is the open one. */
+  workspaces: WorkspaceSummary[];
   currentUser: TeamMember;
   team: TeamMember[];
+  invites: PendingInvite[];
+  activity: ActivityItem[];
   students: Student[];
   programmes: Programme[];
   matches: MatchResult[];
@@ -497,42 +524,57 @@ function mapAcademic(academic: Record<string, unknown> | null): AcademicFacts {
   };
 }
 
-export async function loadWorkspaceData(): Promise<WorkspaceData> {
+export async function loadWorkspaceData(preferredWorkspaceId?: string): Promise<WorkspaceData> {
   const supabase = createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user)
     throw new Error("Your session expired. Please sign in again.");
 
   const user = authData.user;
-  const membershipResult = await supabase
-    .from("workspace_members")
-    .select("workspace_id, role")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
+  // Invitations sent to this email since the last visit join their workspaces now.
+  await supabase.rpc("accept_pending_invites");
 
-  let membership = membershipResult.data;
-  const membershipError = membershipResult.error;
-
+  const loadMemberships = () =>
+    supabase
+      .from("workspace_members")
+      .select("workspace_id, role, workspaces(id, name, plan)")
+      .eq("user_id", user.id)
+      .order("created_at");
+  let { data: membershipRows, error: membershipError } = await loadMemberships();
   if (membershipError) throw membershipError;
-  if (!membership) {
+  if (!membershipRows?.length) {
     const name = String(
       user.user_metadata?.workspace_name ??
         `${user.email?.split("@")[0] ?? "My"}'s workspace`,
     );
-    const { data: workspace, error } = await supabase
-      .from("workspaces")
-      .insert({
-        name,
-        slug: `workspace-${user.id}`,
-        created_by: user.id,
-        business_email: user.email,
-      })
-      .select("id")
-      .single();
+    const { error } = await supabase.rpc("create_workspace", { workspace_name: name });
     if (error) throw error;
-    membership = { workspace_id: workspace.id, role: "admin" };
+    ({ data: membershipRows, error: membershipError } = await loadMemberships());
+    if (membershipError) throw membershipError;
   }
+  const workspaces: WorkspaceSummary[] = (membershipRows ?? []).map((row) => {
+    const workspace = asObject(row.workspaces) ?? {};
+    return {
+      id: String(row.workspace_id),
+      name: String(workspace.name ?? "Workspace"),
+      role: String(row.role),
+      plan: String(workspace.plan ?? "starter"),
+    };
+  });
+  const { data: ownProfile } = await supabase
+    .from("profiles")
+    .select("full_name, phone, onboarding_completed_at, active_workspace_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  const open =
+    workspaces.find((item) => item.id === preferredWorkspaceId) ??
+    workspaces.find((item) => item.id === ownProfile?.active_workspace_id) ??
+    workspaces[0];
+  const membership = { workspace_id: open.id, role: open.role };
+  await supabase
+    .from("profiles")
+    .update({ last_seen_at: new Date().toISOString(), active_workspace_id: open.id })
+    .eq("id", user.id);
 
   const workspaceId = membership.workspace_id;
   const [
@@ -566,10 +608,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
       .select("*, students(first_name,last_name), programmes(university_name)")
       .eq("workspace_id", workspaceId)
       .order("due_at"),
-    supabase
-      .from("workspace_members")
-      .select("user_id, role")
-      .eq("workspace_id", workspaceId),
+    supabase.rpc("workspace_directory", { target_workspace: workspaceId }),
   ]);
 
   const firstError = [
@@ -583,40 +622,59 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   ].find((result) => result.error)?.error;
   if (firstError) throw firstError;
 
-  const memberRows = membersResult.data ?? [];
-  const memberIds = memberRows.map((member) => member.user_id);
-  const { data: profiles, error: profilesError } = memberIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, full_name, phone, onboarding_completed_at")
-        .in("id", memberIds)
-    : { data: [], error: null };
-  if (profilesError) throw profilesError;
-  const profileMap = new Map(
-    (profiles ?? []).map((profile) => [profile.id, profile]),
-  );
-
+  const memberRows = (membersResult.data ?? []) as Record<string, unknown>[];
   const team: TeamMember[] = memberRows.map((member) => {
-    const profile = profileMap.get(member.user_id);
-    const name =
-      profile?.full_name ||
-      (member.user_id === user.id
-        ? String(
-            user.user_metadata?.full_name ??
-              user.email?.split("@")[0] ??
-              "User",
-          )
-        : "Team member");
+    const id = String(member.user_id);
+    const email = String(member.email ?? "");
+    const name = String(member.full_name || email.split("@")[0] || "Team member");
     return {
-      id: member.user_id,
+      id,
       name,
-      email:
-        member.user_id === user.id ? (user.email ?? "") : "Workspace member",
-      role: member.role,
+      email,
+      role: String(member.role),
       initials: initials(name),
-      tone: toneFor(member.user_id),
+      tone: toneFor(id),
+      lastSeenAt: typeof member.last_seen_at === "string" ? member.last_seen_at : null,
+      joinedAt: typeof member.joined_at === "string" ? member.joined_at : null,
     };
   });
+  const nameById = new Map(team.map((member) => [member.id, member.name]));
+
+  const canManage = ["admin", "manager"].includes(membership.role);
+  const [invitesResult, activityResult] = await Promise.all([
+    canManage
+      ? supabase
+          .from("workspace_invites")
+          .select("id, email, role, token, created_at, expires_at")
+          .eq("workspace_id", workspaceId)
+          .is("accepted_at", null)
+          .is("revoked_at", null)
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("activity_logs")
+      .select("id, actor_id, action, entity_type, metadata, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+  ]);
+  const invites: PendingInvite[] = ((invitesResult.data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    email: String(row.email),
+    role: String(row.role),
+    token: String(row.token),
+    createdAt: String(row.created_at),
+    expiresAt: String(row.expires_at),
+  }));
+  const activity: ActivityItem[] = ((activityResult.data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    actorName: nameById.get(String(row.actor_id)) ?? "A former member",
+    action: String(row.action),
+    entityType: String(row.entity_type),
+    metadata: asObject(row.metadata) ?? {},
+    createdAt: String(row.created_at),
+  }));
 
   const studentRows = (studentsResult.data ?? []) as Record<string, unknown>[];
   const students: Student[] = studentRows.map((row) => {
@@ -819,7 +877,7 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   });
 
   const workspaceRow = workspaceResult.data;
-  const currentProfile = profileMap.get(user.id);
+  const currentProfile = ownProfile;
   const currentName =
     currentProfile?.full_name ||
     String(
@@ -848,6 +906,9 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
     isVerifier,
     universities,
     onboardingComplete: Boolean(currentProfile?.onboarding_completed_at),
+    workspaces,
+    invites,
+    activity,
     workspace: {
       id: workspaceRow.id,
       name: workspaceRow.name,
@@ -867,6 +928,64 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
     applications,
     deadlines,
   };
+}
+
+function rpcError(error: { message: string } | null) {
+  if (error) throw new Error(error.message);
+}
+
+/** Creates a workspace owned by the signed-in person and makes it the open one. */
+export async function createWorkspace(name: string) {
+  const { data, error } = await createClient().rpc("create_workspace", { workspace_name: name });
+  rpcError(error);
+  return String(data);
+}
+
+/** Invites an email to the workspace; returns the token for the invitation link. */
+export async function inviteMember(workspaceId: string, email: string, role: string) {
+  const { data, error } = await createClient().rpc("invite_member", {
+    target_workspace: workspaceId,
+    invite_email: email,
+    invite_role: role,
+  });
+  rpcError(error);
+  return String(data);
+}
+
+export async function revokeInvite(inviteId: string) {
+  const { error } = await createClient().rpc("revoke_invite", { invite_id: inviteId });
+  rpcError(error);
+}
+
+export async function setMemberRole(workspaceId: string, userId: string, role: string) {
+  const { error } = await createClient().rpc("set_member_role", {
+    target_workspace: workspaceId,
+    target_user: userId,
+    new_role: role,
+  });
+  rpcError(error);
+}
+
+export async function removeMember(workspaceId: string, userId: string) {
+  const { error } = await createClient().rpc("remove_member", {
+    target_workspace: workspaceId,
+    target_user: userId,
+  });
+  rpcError(error);
+}
+
+/** What an invitation link shows before signing in. */
+export async function invitePreview(token: string) {
+  const { data } = await createClient().rpc("invite_preview", { invite_token: token });
+  const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return row
+    ? {
+        workspaceId: String(row.workspace_id),
+        workspaceName: String(row.workspace_name),
+        email: String(row.email),
+        role: String(row.role),
+      }
+    : null;
 }
 
 export async function completeOnboarding() {
