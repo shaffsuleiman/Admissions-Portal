@@ -13,12 +13,12 @@ import {
   Users,
 } from "lucide-react";
 import milanPhoto from "../../../public/images/campus/milan.jpg";
-import { CATALOGUE, PHOTOS } from "./content";
+import { CATALOGUE, PHOTOS, TAGLINE } from "./content";
 
 const STEPS = [
   {
     title: "Upload the documents",
-    body: "Drop in transcripts, degree certificates and test scores. Eligify reads grades, credit hours and subjects for you.",
+    body: "Drop in transcripts, degree certificates and test scores. MatchED reads grades, credit hours and subjects for you.",
   },
   {
     title: "Confirm the profile",
@@ -69,10 +69,10 @@ export default function HomePage() {
       <section className="evidence-hero" aria-labelledby="evidence-hero-title">
         <div className="evidence-hero-inner">
           <div className="evidence-copy">
-            <p className="evidence-kicker">Evidence file · 2026/27 intake</p>
+            <p className="evidence-kicker">{TAGLINE.replace(/\.$/, "")}</p>
             <h1 id="evidence-hero-title">Turn every student profile into a defensible shortlist.</h1>
             <p className="evidence-summary">
-              Eligify reads academic documents, converts credits for each student and checks them against official
+              MatchED reads academic documents, converts credits for each student and checks them against official
               programme requirements, so every recommendation comes with its reasons.
             </p>
             <div className="evidence-actions">
@@ -182,7 +182,7 @@ export default function HomePage() {
       <section className="site-section" id="how-it-works">
         <div className="site-shell">
           <div className="site-section-head archive-section-heading">
-            <h2>How Eligify builds the shortlist</h2>
+            <h2>How MatchED builds the shortlist</h2>
             <p>From academic records to a recommendation your counsellors can explain and verify.</p>
           </div>
           <ol className="site-steps">
@@ -227,7 +227,7 @@ export default function HomePage() {
             <h2>Stop checking programme pages one by one</h2>
             <p>
               Entry rules for Italian programmes are spread across hundreds of university websites, each with its own
-              way of describing credits, grades and English tests. Eligify brings them into one place and checks every
+              way of describing credits, grades and English tests. MatchED brings them into one place and checks every
               student the same way.
             </p>
             <ul className="site-checks">
@@ -246,7 +246,7 @@ export default function HomePage() {
         <div className="site-shell site-cta-inner">
           <div>
             <h2>See it with your own students</h2>
-            <p>Book a 30-minute call and we will run a real profile through Eligify with you.</p>
+            <p>Book a 30-minute call and we will run a real profile through MatchED with you.</p>
           </div>
           <div className="site-actions">
             <Link href="/book" className="primary-button site-button-lg site-button-light">

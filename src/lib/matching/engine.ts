@@ -49,7 +49,13 @@ export type Conversion = {
 
 export const DEFAULT_CONVERSION: Conversion = { ectsPerCreditHour: 1.8, passRatio: 0.5 };
 
+export type HighestQualification = "bachelor" | "higher_secondary";
+
 export type StudentFacts = {
+  /** A completed degree, or school results only (Matric/FSc, O/A levels). */
+  highestQualification?: HighestQualification;
+  /** Best school result as a percentage, used for bachelor's and single-cycle programmes. */
+  schoolPercent?: number | null;
   /** e.g. "BS Computer Science"; compared against a programme's accepted fields. */
   degreeTitle?: string | null;
   yearsOfEducation: number | null;
@@ -171,6 +177,32 @@ function intakeSeason(value: string) {
   return null;
 }
 
+/** Counsellor guide for school results: 70% and above is a strong applicant, 60–69% is close. */
+export const SCHOOL_THRESHOLDS = { exact: 70, close: 60 } as const;
+
+/** IBCC equivalence for A level grades, as used for Pakistani university admissions. */
+const A_LEVEL_PERCENT: Record<string, number> = { "A*": 90, A: 85, B: 75, C: 65, D: 55, E: 45 };
+
+/** Average percentage for grades written like "A*AB" or "A*, A, B"; null when none are recognised. */
+export function aLevelPercent(grades: string | null | undefined) {
+  const tokens = (grades ?? "").toUpperCase().match(/A\*|[A-E]/g) ?? [];
+  if (!tokens.length) return null;
+  return Math.round(tokens.reduce((sum, token) => sum + A_LEVEL_PERCENT[token], 0) / tokens.length);
+}
+
+/** The result that admissions look at: FSc / intermediate first, then A levels, then Matric / O levels. */
+export function schoolPercentFrom(input: {
+  higherSecondaryPercent?: number | null;
+  aLevelGrades?: string | null;
+  secondaryPercent?: number | null;
+}) {
+  return input.higherSecondaryPercent ?? aLevelPercent(input.aLevelGrades) ?? input.secondaryPercent ?? null;
+}
+
+export function isBachelorLevel(level: string | null | undefined) {
+  return /bachelor|single/i.test(level ?? "");
+}
+
 /** A matchable programme must contain at least one actual admissions rule. */
 export function hasEligibilityRules(rules: ProgrammeRules) {
   return Boolean(
@@ -224,6 +256,8 @@ export function evaluate(
     programmeIntake?: string | null;
     targetIntake?: string | null;
     dataConfidence?: number | null;
+    /** "Bachelor", "Master" or "Single-cycle"; first-level programmes judge school results, not a degree. */
+    programmeLevel?: string | null;
   } = {},
 ): Evaluation {
   const universityConversion = options.conversion ?? DEFAULT_CONVERSION;
@@ -243,9 +277,13 @@ export function evaluate(
       score: 0,
     });
 
+  const firstLevel = isBachelorLevel(options.programmeLevel);
+  const schoolLeaver = student.highestQualification === "higher_secondary";
+
   // 0. Field of the previous degree. A degree outside the accepted backgrounds is not
-  // eligible; only a missing degree title stays uncertain.
-  if (rules.acceptedFields?.length) {
+  // eligible; only a missing degree title stays uncertain. First-level programmes admit
+  // from school, so a previous degree field does not apply to them.
+  if (rules.acceptedFields?.length && !firstLevel) {
     const degree = student.degreeTitle?.trim();
     const fits = degree ? rules.acceptedFields.some((field) => degreeMatchesField(degree, field)) : false;
     checks.push({
@@ -276,6 +314,29 @@ export function evaluate(
       });
   }
 
+  // 1b. School results for bachelor's and single-cycle programmes
+  if (firstLevel && (schoolLeaver || student.schoolPercent != null)) {
+    const percent = student.schoolPercent ?? null;
+    if (percent == null)
+      checks.push({ key: "grade", label: "School results", outcome: "borderline", detail: "School results not recorded", score: 45 });
+    else {
+      const outcome: CheckOutcome =
+        percent >= SCHOOL_THRESHOLDS.exact ? "pass" : percent >= SCHOOL_THRESHOLDS.close ? "borderline" : "fail";
+      checks.push({
+        key: "grade",
+        label: "School results",
+        outcome,
+        detail:
+          outcome === "pass"
+            ? `School results ${percent}%, meets the ${SCHOOL_THRESHOLDS.exact}% guide`
+            : outcome === "borderline"
+              ? `School results ${percent}%, close to the ${SCHOOL_THRESHOLDS.exact}% guide`
+              : `School results ${percent}%, below the ${SCHOOL_THRESHOLDS.close}% minimum guide`,
+        score: outcome === "pass" ? thresholdScore(percent, SCHOOL_THRESHOLDS.exact) : outcome === "borderline" ? 60 : 20,
+      });
+    }
+  }
+
   // 2. Subject-area credits, converted with the student's own ratio (or the university's)
   for (const requirement of rules.subjectCredits ?? []) {
     if (!requirement.ects) continue;
@@ -297,8 +358,8 @@ export function evaluate(
     });
   }
 
-  // 3. Grade minimum on the programme's scale
-  if (rules.minGrade110 || rules.minCgpa4) {
+  // 3. Grade minimum on the programme's scale (a degree CGPA; school-leavers are judged on school results)
+  if ((rules.minGrade110 || rules.minCgpa4) && !(firstLevel && schoolLeaver)) {
     if (student.cgpa == null || !student.cgpaScale)
       checks.push({ key: "grade", label: "Grade", outcome: "borderline", detail: "CGPA not recorded", score: 45 });
     else if (student.cgpa < 0 || student.cgpa > student.cgpaScale)

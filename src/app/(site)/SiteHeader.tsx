@@ -16,12 +16,12 @@ export function SiteBrand() {
   return (
     <span className="brand">
       <span className="brand-symbol" aria-hidden="true">
-        <span />
-        <span />
-        <span />
+        <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+          <polyline points="12,46 21,22 31,38 52,14" />
+        </svg>
       </span>
       <span>
-        <strong>Eligify</strong>
+        <strong>MatchED</strong>
         <small>ADMISSIONS OS</small>
       </span>
     </span>
@@ -46,7 +46,7 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="site-shell site-header-inner">
-        <Link href="/" className="site-brand-link" aria-label="Eligify home">
+        <Link href="/" className="site-brand-link" aria-label="MatchED home">
           <SiteBrand />
         </Link>
         <button

@@ -24,7 +24,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { ProfileReview } from "@/components/ProfileReview";
 import { ProgrammeEditor } from "@/components/ProgrammeEditor";
 import { ShortlistReport } from "@/components/ShortlistReport";
-import { hasEligibilityRules, studentEctsRatio } from "@/lib/matching/engine";
+import { DEFAULT_CONVERSION, hasEligibilityRules, studentEctsRatio } from "@/lib/matching/engine";
 import {
   createApplicationFromMatch,
   aiReviewProgramme,
@@ -146,8 +146,9 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
       row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
     )
     .join("\n");
+  // The byte-order mark makes Excel read the file as UTF-8, so accented names survive.
   const url = URL.createObjectURL(
-    new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }),
   );
   const link = Object.assign(document.createElement("a"), {
     href: url,
@@ -155,6 +156,41 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
   });
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/** Course-by-course credit sheet: subject area, credit hours, grade and ECTS at the student's own ratio. */
+function exportCreditSheet(student: Student) {
+  const ratio = studentEctsRatio(student.academic);
+  const perHour = ratio?.ratio ?? DEFAULT_CONVERSION.ectsPerCreditHour;
+  const round = (value: number) => Math.round(value * 10) / 10;
+  const rows: (string | number)[][] = [
+    ["Student", student.name],
+    ["Degree", student.academic.degreeTitle || student.degree],
+    ["Total credit hours", student.academic.totalCreditHours ?? ""],
+    [
+      "ECTS per credit hour",
+      ratio
+        ? `${perHour.toFixed(2)} (${ratio.degreeEcts} ECTS / ${ratio.totalCreditHours} credit hours)`
+        : `${perHour} (standard rate; add years of education and total credit hours for the student's own ratio)`,
+    ],
+    [],
+    ["Subject area", "Course", "Credit hours", "Grade", "ECTS"],
+  ];
+  for (const credit of student.credits) {
+    for (const course of credit.courses) {
+      rows.push([
+        credit.area,
+        course.title,
+        course.creditHours ?? "",
+        course.grade,
+        course.creditHours != null ? round(course.creditHours * perHour) : "",
+      ]);
+    }
+    const hours = credit.creditHours ?? credit.courses.reduce((sum, course) => sum + (course.creditHours ?? 0), 0);
+    rows.push([`${credit.area} total`, "", round(hours), "", round(hours * perHour)]);
+  }
+  const fileName = student.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  downloadCsv(`credit-sheet-${fileName || "student"}.csv`, rows);
 }
 
 function useEscape(onEscape: () => void) {
@@ -200,12 +236,12 @@ function Brand({ light = false }: { light?: boolean }) {
   return (
     <div className={`brand ${light ? "brand-light" : ""}`}>
       <div className="brand-symbol">
-        <span />
-        <span />
-        <span />
+        <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+          <polyline points="12,46 21,22 31,38 52,14" />
+        </svg>
       </div>
       <div>
-        <strong>Eligify</strong>
+        <strong>MatchED</strong>
         <small>ADMISSIONS OS</small>
       </div>
     </div>
@@ -389,7 +425,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           sizes="(max-width: 820px) 100vw, 55vw"
         />
         <div className="auth-story-veil" />
-        <Link href="/" className="auth-home-link" aria-label="Eligify website">
+        <Link href="/" className="auth-home-link" aria-label="MatchED website">
           <Brand light />
         </Link>
         <div className="story-copy">
@@ -443,7 +479,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       </section>
       <section className="auth-panel">
         <div className="mobile-brand">
-          <Link href="/" className="auth-home-link" aria-label="Eligify website">
+          <Link href="/" className="auth-home-link" aria-label="MatchED website">
             <Brand />
           </Link>
         </div>
@@ -564,7 +600,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               </>
             ) : (
               <>
-                New to Eligify?{" "}
+                New to MatchED?{" "}
                 <button onClick={() => switchMode("signup")}>
                   Create a workspace
                 </button>
@@ -574,7 +610,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           {configured ? (
             <p className="demo-notice connected">
               <ShieldCheck size={13} /> Secure sign-in · connected to your
-              Eligify workspace
+              MatchED workspace
             </p>
           ) : (
             <p className="demo-notice">
@@ -620,7 +656,7 @@ function ResetPasswordScreen({ onComplete, onCancel }: { onComplete: () => void;
         <Brand light />
         <div className="story-copy">
           <h1>Choose a new <em>secure password.</em></h1>
-          <p>Your recovery link has been verified. Set the password you’ll use for your Eligify workspace.</p>
+          <p>Your recovery link has been verified. Set the password you’ll use for your MatchED workspace.</p>
         </div>
       </section>
       <section className="auth-panel">
@@ -1313,6 +1349,7 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
             <MatchesView
               students={students}
               matches={matches}
+              universities={universities}
               onOpen={(student) => setSelectedStudent(student)}
               onReview={(student) => setReviewStudentId(student.id)}
               onReport={(student) => setReportStudentId(student.id)}
@@ -2011,8 +2048,10 @@ function Overview({
                 </span>
               </div>
               <div className="match-score">
-                <b className={scoreTone(match.status)}>{match.score}%</b>
-                <span>{match.status}</span>
+                <b className={scoreTone(match.status)}>{statusLabel(match.status)}</b>
+                <span>
+                  {requirementSummary(match.checks).met} of {requirementSummary(match.checks).total} rules
+                </span>
               </div>
             </div>
           ))}
@@ -2597,6 +2636,62 @@ function upcomingIntakes(from: Date, count = 4) {
 const UPCOMING_INTAKES = upcomingIntakes(TODAY);
 const DEFAULT_INTAKE = UPCOMING_INTAKES.find((intake) => intake.startsWith("Fall")) ?? UPCOMING_INTAKES[0];
 
+/** Counsellor-facing names for the engine's outcomes: an exact match meets every rule, a close match nearly does. */
+function statusLabel(status: string) {
+  return status === "Eligible" ? "Exact match" : status === "Borderline" ? "Close match" : status;
+}
+
+function levelLabel(level: string) {
+  if (/single/i.test(level)) return "Single-cycle master’s";
+  if (/bachelor/i.test(level)) return "Bachelor’s";
+  if (/master/i.test(level)) return "Master’s";
+  return level || "Level not set";
+}
+
+/** Requirements the student meets out of those the engine checked (preferences excluded). */
+function requirementSummary(checks: MatchResult["checks"]) {
+  const rules = checks.filter((check) => check.category !== "preference");
+  return {
+    met: rules.filter((check) => check.outcome === "pass").length,
+    total: rules.length,
+    toConfirm: rules.filter((check) => check.outcome === "borderline").length,
+  };
+}
+
+/**
+ * Regional right-to-study (DSU) scholarships are open at public and private universities alike;
+ * what differs is where the student applies. Guidance only: the yearly call is the authority.
+ */
+const DSU_AGENCIES: Record<string, string> = {
+  Abruzzo: "ADSU (the agency for the university’s city)",
+  Basilicata: "ARDSU Basilicata",
+  Calabria: "the university’s right-to-study office",
+  Campania: "ADISURC",
+  "Emilia-Romagna": "ER.GO",
+  "Friuli-Venezia Giulia": "ARDiS",
+  Lazio: "DiSCo Lazio",
+  Liguria: "ALiSEO",
+  Lombardia: "the university’s right-to-study office",
+  Marche: "ERDIS Marche",
+  Molise: "the regional right-to-study office",
+  Piemonte: "EDISU Piemonte",
+  Puglia: "ADISU Puglia",
+  Sardegna: "ERSU (Cagliari or Sassari)",
+  Sicilia: "ERSU (the agency for the university’s city)",
+  Toscana: "DSU Toscana",
+  "Trentino-Alto Adige": "Opera Universitaria or the Province of Bolzano",
+  Umbria: "ADiSU Umbria",
+  "Valle D'Aosta": "the Valle d’Aosta region",
+  Veneto: "ESU (Padova, Venezia or Verona)",
+};
+
+function scholarshipNote(university: University | undefined) {
+  if (!university) return "Regional scholarship: check the university’s right-to-study page";
+  if (university.institutionType === "Non statale")
+    return "Regional scholarship open · apply through the university’s own student-support office";
+  return `Regional scholarship open · apply through ${DSU_AGENCIES[university.region] ?? "the regional right-to-study agency"}`;
+}
+
 const MATCH_PAGE_SIZE = 20;
 const PROGRAMME_PAGE_SIZE = 50;
 
@@ -2625,6 +2720,7 @@ function orderedChecks(checks: MatchResult["checks"]) {
 function MatchesView({
   students,
   matches,
+  universities,
   onOpen,
   onReview,
   onReport,
@@ -2634,6 +2730,7 @@ function MatchesView({
 }: {
   students: Student[];
   matches: MatchResult[];
+  universities: University[];
   onOpen: (student: Student) => void;
   onReview: (student: Student) => void;
   onReport: (student: Student) => void;
@@ -2641,7 +2738,12 @@ function MatchesView({
   onStartApplication: (match: MatchResult) => Promise<void>;
   onNotify: (message: string) => void;
 }) {
-  const [filter, setFilter] = useState("All results");
+  const [filter, setFilter] = useState("All matches");
+  const [showNotEligible, setShowNotEligible] = useState(false);
+  const universityById = useMemo(
+    () => new Map(universities.map((university) => [university.id, university])),
+    [universities],
+  );
   const [sort, setSort] = useState<MatchSort>("best");
   const [shown, setShown] = useState(MATCH_PAGE_SIZE);
   const [studentId, setStudentId] = useState(students[0]?.id ?? "");
@@ -2654,12 +2756,18 @@ function MatchesView({
   const studentMatches = matches.filter(
     (match) => match.studentId === student?.id,
   );
+  // Not eligible results stay hidden unless asked for: they only explain why a programme is missing.
   const filtered = sortMatches(
-    studentMatches.filter(
-      (match) => filter === "All results" || match.status === filter,
-    ),
+    studentMatches.filter((match) => {
+      if (match.status === "Not eligible" && !showNotEligible) return false;
+      if (filter === "Exact match") return match.status === "Eligible";
+      if (filter === "Close match") return match.status === "Borderline";
+      if (filter === "Not eligible") return match.status === "Not eligible";
+      return true;
+    }),
     sort,
   );
+  const notEligibleCount = studentMatches.filter((match) => match.status === "Not eligible").length;
   // Rendering hundreds of full cards at once makes the page very slow, so results load in pages.
   const visible = filtered.slice(0, shown);
   const chooseFilter = (next: string) => {
@@ -2763,7 +2871,7 @@ function MatchesView({
               value={student.id}
               onChange={(event) => {
                 setStudentId(event.target.value);
-                chooseFilter("All results");
+                chooseFilter("All matches");
                 setLiveResearch(null);
               }}
             >
@@ -2874,7 +2982,7 @@ function MatchesView({
                 .length
             }
           </strong>
-          <span>eligible</span>
+          <span>exact matches</span>
         </div>
         <div className="warn">
           <strong>
@@ -2883,7 +2991,7 @@ function MatchesView({
                 .length
             }
           </strong>
-          <span>borderline</span>
+          <span>close matches</span>
         </div>
         <div className="bad">
           <strong>
@@ -2903,7 +3011,7 @@ function MatchesView({
       </div>
       <div className="match-controls">
         <div className="segmented" role="group" aria-label="Filter results">
-          {["All results", "Eligible", "Borderline", "Not eligible"].map(
+          {["All matches", "Exact match", "Close match", ...(showNotEligible ? ["Not eligible"] : [])].map(
             (item) => (
               <button
                 key={item}
@@ -2916,6 +3024,18 @@ function MatchesView({
             ),
           )}
         </div>
+        <label className="match-toggle">
+          <input
+            type="checkbox"
+            checked={showNotEligible}
+            onChange={(event) => {
+              setShowNotEligible(event.target.checked);
+              if (!event.target.checked && filter === "Not eligible") chooseFilter("All matches");
+              setShown(MATCH_PAGE_SIZE);
+            }}
+          />
+          Show not eligible ({notEligibleCount})
+        </label>
         <label className="outline-button match-sort">
           <ListFilter size={15} />
           <span className="sr-only">Sort results</span>
@@ -2932,8 +3052,16 @@ function MatchesView({
           </select>
         </label>
       </div>
+      <p className="match-disclaimer">
+        <ShieldCheck size={15} aria-hidden="true" />
+        Matches compare the student with each programme’s published entry rules. Meeting every rule
+        does not guarantee admission: the university’s admissions committee makes the final decision.
+      </p>
       <div className="match-card-list">
-        {visible.map((match) => (
+        {visible.map((match) => {
+          const university = match.universityId ? universityById.get(match.universityId) : undefined;
+          const summary = requirementSummary(match.checks);
+          return (
           <article className="match-card" key={match.id}>
             <div className="match-main">
               <CampusMark
@@ -2944,7 +3072,7 @@ function MatchesView({
               />
               <div className="match-title">
                 <div>
-                  <Status text={match.status} />
+                  <Status text={statusLabel(match.status)} />
                   {match.programmeVerified ? (
                     <span className="fresh-label">
                       <ShieldCheck size={12} /> Rules verified {match.verified}
@@ -2960,6 +3088,29 @@ function MatchesView({
                   {match.university} <span>·</span> <MapPin size={13} />{" "}
                   {match.city}
                 </p>
+                <ul className="match-facts" aria-label="Programme facts">
+                  <li>
+                    <GraduationCap size={13} aria-hidden="true" /> {levelLabel(match.degreeLevel)}
+                  </li>
+                  <li>
+                    <Building2 size={13} aria-hidden="true" />{" "}
+                    {university ? (university.institutionType === "Non statale" ? "Private" : "Public") : "Institution type not set"}
+                  </li>
+                  <li className={match.accessRestricted ? "is-restricted" : ""}>
+                    <LockKeyhole size={13} aria-hidden="true" />{" "}
+                    {match.accessRestricted === true
+                      ? "Restricted access"
+                      : match.accessRestricted === false
+                        ? "Open access"
+                        : "Access: check the call"}
+                  </li>
+                  <li>
+                    <BarChart3 size={13} aria-hidden="true" />{" "}
+                    {university?.qsRankLabel
+                      ? `QS ${university.qsRankLabel}${university.qsRankYear ? ` (${university.qsRankYear})` : ""}`
+                      : "QS rank not added"}
+                  </li>
+                </ul>
                 {/^https?:\/\//.test(match.source) && (
                   <a
                     className="official-link"
@@ -2968,7 +3119,10 @@ function MatchesView({
                     rel="noreferrer"
                     aria-label={`Confirm ${match.programme} on the official ${match.university} website`}
                   >
-                    Confirm on the official university page <ExternalLink size={12} />
+                    {match.sourceIsCourseList
+                      ? "Confirm on the university’s course list"
+                      : "Confirm on the official programme page"}{" "}
+                    <ExternalLink size={12} />
                   </a>
                 )}
                 <div className="programme-meta">
@@ -2982,13 +3136,15 @@ function MatchesView({
                     Teaching language <b>English</b>
                   </span>
                 </div>
+                <p className="match-scholarship">{scholarshipNote(university)}</p>
               </div>
-              <div className="large-score">
+              <div className="large-score requirement-score">
                 <strong className={scoreTone(match.status)}>
-                  {match.score}
-                  <small>%</small>
+                  {summary.met}
+                  <small>/{summary.total}</small>
                 </strong>
-                <span>rank score</span>
+                <span>requirements met</span>
+                {summary.toConfirm ? <small>{summary.toConfirm} to confirm</small> : null}
               </div>
             </div>
             <div className="rule-bar">
@@ -3049,7 +3205,8 @@ function MatchesView({
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
         {filtered.length > visible.length && (
           <button
             className="secondary-button show-more"
@@ -5013,6 +5170,13 @@ function StudentDrawer({
                     {student.confidence}% confidence
                   </span>
                 )}
+                <button
+                  className="text-button"
+                  disabled={!student.credits.length}
+                  onClick={() => exportCreditSheet(student)}
+                >
+                  <Download size={14} /> Credit sheet
+                </button>
               </div>
               <div className="credit-list">
                 {student.credits.map((credit) => (
@@ -5102,7 +5266,7 @@ function StudentDrawer({
                   <strong>{match.programme}</strong>
                   <small>{match.university}</small>
                 </div>
-                <b className={scoreTone(match.status)}>{match.score}%</b>
+                <b className={scoreTone(match.status)}>{statusLabel(match.status)}</b>
               </div>
             ))}
             {!matches.length && (
@@ -5240,8 +5404,10 @@ function NewStudentWizard({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
+  const [applyingFor, setApplyingFor] = useState<"master" | "bachelor">("master");
   const [degree, setDegree] = useState("");
   const [cgpa, setCgpa] = useState("");
+  const [schoolPercent, setSchoolPercent] = useState("");
   const [budget, setBudget] = useState("");
   const [english, setEnglish] = useState("");
   const [country, setCountry] = useState("Italy");
@@ -5259,7 +5425,10 @@ function NewStudentWizard({
       : step === 2
         ? consent && files.length > 0
         : step === 3
-          ? Boolean(degree.trim())
+          ? Boolean(degree.trim()) &&
+            (applyingFor === "master" ||
+              !schoolPercent ||
+              (Number(schoolPercent) >= 0 && Number(schoolPercent) <= 100))
           : true;
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -5298,7 +5467,9 @@ function NewStudentWizard({
         phone,
         city,
         degree,
-        cgpa: cgpa ? Number(cgpa) : null,
+        cgpa: applyingFor === "master" && cgpa ? Number(cgpa) : null,
+        highestQualification: applyingFor === "bachelor" ? "higher_secondary" : "bachelor",
+        higherSecondaryPercent: applyingFor === "bachelor" && schoolPercent ? Number(schoolPercent) : null,
         cgpaScale: 4,
         country,
         intake,
@@ -5494,28 +5665,59 @@ function NewStudentWizard({
               <p className="step-help">
                 Set matching preferences. These can be changed at any time.
               </p>
+              <div className="segmented qualification-switch" role="group" aria-label="Applying for">
+                {([
+                  ["master", "Master’s (has a degree)"],
+                  ["bachelor", "Bachelor’s (FSc / A levels)"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={applyingFor === value}
+                    className={applyingFor === value ? "active" : ""}
+                    onClick={() => setApplyingFor(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="field-grid">
                 <label>
-                  Current degree
+                  {applyingFor === "master" ? "Current degree" : "School qualification"}
                   <input
                     value={degree}
                     onChange={(event) => setDegree(event.target.value)}
-                    placeholder="BS Computer Science"
+                    placeholder={applyingFor === "master" ? "BS Computer Science" : "FSc Pre-Engineering or A levels"}
                     required
                   />
                 </label>
-                <label>
-                  CGPA
-                  <input
-                    type="number"
-                    min="0"
-                    max="4"
-                    step="0.01"
-                    value={cgpa}
-                    onChange={(event) => setCgpa(event.target.value)}
-                    placeholder="3.42"
-                  />
-                </label>
+                {applyingFor === "master" ? (
+                  <label>
+                    CGPA
+                    <input
+                      type="number"
+                      min="0"
+                      max="4"
+                      step="0.01"
+                      value={cgpa}
+                      onChange={(event) => setCgpa(event.target.value)}
+                      placeholder="3.42"
+                    />
+                  </label>
+                ) : (
+                  <label>
+                    FSc / A level result (%)
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={schoolPercent}
+                      onChange={(event) => setSchoolPercent(event.target.value)}
+                      placeholder="74"
+                    />
+                  </label>
+                )}
                 <label>
                   Target country
                   <select
@@ -5572,7 +5774,7 @@ function NewStudentWizard({
               </div>
               <h3>Everything looks ready.</h3>
               <p>
-                Eligify will create {firstName}’s profile and prepare{" "}
+                MatchED will create {firstName}’s profile and prepare{" "}
                 {files.length} uploaded{" "}
                 {files.length === 1 ? "document" : "documents"} for your review.
               </p>

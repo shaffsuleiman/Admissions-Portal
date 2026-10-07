@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { AlertTriangle, Check, Download, Printer, X } from "lucide-react";
-import { toItalian110 } from "@/lib/matching/engine";
+import { schoolPercentFrom, toItalian110 } from "@/lib/matching/engine";
 import type { MatchResult, Student, TeamMember, Workspace } from "@/lib/supabase/workspace-data";
 
 const outcomeIcon = { pass: Check, borderline: AlertTriangle, fail: X } as const;
@@ -39,6 +39,7 @@ export function ShortlistReport({
   const excluded = matches.length - reviewed.length;
   const academic = student.academic;
   const grade110 = academic.cgpa != null && academic.cgpaScale ? toItalian110(academic.cgpa, academic.cgpaScale) : null;
+  const schoolResult = schoolPercentFrom(academic);
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
   const programme = (match: MatchResult, rank: number) => (
@@ -51,10 +52,16 @@ export function ShortlistReport({
             {match.university} · {match.city}
           </p>
         </div>
-        <span className={`report-pill ${match.status === "Eligible" ? "good" : "warn"}`}>{match.status}</span>
+        <span className={`report-pill ${match.status === "Eligible" ? "good" : "warn"}`}>{match.status === "Eligible" ? "Exact match" : "Close match"}</span>
       </div>
       <dl className="report-facts">
-        <div><dt>Rank score</dt><dd>{match.score}/100</dd></div>
+        <div>
+          <dt>Requirements met</dt>
+          <dd>
+            {match.checks.filter((check) => check.category !== "preference" && check.outcome === "pass").length} of{" "}
+            {match.checks.filter((check) => check.category !== "preference").length}
+          </dd>
+        </div>
         <div><dt>Tuition / year</dt><dd>{match.fee}</dd></div>
         <div><dt>Application deadline</dt><dd>{match.deadline}</dd></div>
         <div><dt>Rules reviewed</dt><dd>{match.programmeVerified ? "Human verified" : "AI reviewed"} · {match.verified}</dd></div>
@@ -105,20 +112,24 @@ export function ShortlistReport({
           <p className="eyebrow">PROGRAMME SHORTLIST · {today.toUpperCase()}</p>
           <h1>{student.name}</h1>
           <dl className="report-facts">
-            <div><dt>Degree</dt><dd>{academic.degreeTitle || student.degree}</dd></div>
-            <div><dt>CGPA</dt><dd>{academic.cgpa != null ? `${academic.cgpa} / ${academic.cgpaScale}${grade110 ? ` (≈ ${grade110}/110)` : ""}` : "Not recorded"}</dd></div>
+            <div><dt>{academic.highestQualification === "higher_secondary" ? "Qualification" : "Degree"}</dt><dd>{academic.degreeTitle || student.degree}</dd></div>
+            {academic.highestQualification === "higher_secondary" ? (
+              <div><dt>School result</dt><dd>{schoolResult != null ? `${schoolResult}%` : "Not recorded"}</dd></div>
+            ) : (
+              <div><dt>CGPA</dt><dd>{academic.cgpa != null ? `${academic.cgpa} / ${academic.cgpaScale}${grade110 ? ` (≈ ${grade110}/110)` : ""}` : "Not recorded"}</dd></div>
+            )}
             <div><dt>English</dt><dd>{academic.englishOverall != null ? `${academic.englishTestType} ${academic.englishOverall}` : academic.mediumOfInstruction ? "Medium of instruction" : "Not recorded"}</dd></div>
             <div><dt>Target</dt><dd>{student.target}</dd></div>
           </dl>
         </section>
 
-        <h2 className="report-heading">Eligible programmes ({eligible.length})</h2>
+        <h2 className="report-heading">Exact matches ({eligible.length})</h2>
         {eligible.map((match, index) => programme(match, index + 1))}
         {!eligible.length && <p className="report-empty">No reviewed programme is fully eligible yet.</p>}
 
         {borderline.length > 0 && (
           <>
-            <h2 className="report-heading">Worth a closer look ({borderline.length})</h2>
+            <h2 className="report-heading">Close matches ({borderline.length})</h2>
             <p className="report-note">These programmes are close on at least one requirement. Your counsellor will confirm before applying.</p>
             {borderline.map((match, index) => programme(match, eligible.length + index + 1))}
           </>

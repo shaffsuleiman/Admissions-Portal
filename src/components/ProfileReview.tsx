@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileText, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import type { TranscriptExtraction } from "@/lib/ai/schemas";
-import { DEFAULT_CONVERSION, SUBJECT_AREAS, studentEctsRatio, toItalian110 } from "@/lib/matching/engine";
+import { DEFAULT_CONVERSION, SCHOOL_THRESHOLDS, SUBJECT_AREAS, aLevelPercent, schoolPercentFrom, studentEctsRatio, toItalian110, type HighestQualification } from "@/lib/matching/engine";
 import { messageOf, type ConfirmedProfileInput, type Student, type StudentDocument } from "@/lib/supabase/workspace-data";
 
 type CourseRow = { key: string; title: string; creditHours: string; grade: string; area: string };
@@ -31,6 +31,11 @@ export function ProfileReview({
   autoRead?: boolean;
 }) {
   const academic = student.academic;
+  const [qualification, setQualification] = useState<HighestQualification>(academic.highestQualification);
+  const [schoolSystem, setSchoolSystem] = useState(academic.schoolSystem ?? "pakistani_board");
+  const [secondaryPercent, setSecondaryPercent] = useState(text(academic.secondaryPercent));
+  const [higherSecondaryPercent, setHigherSecondaryPercent] = useState(text(academic.higherSecondaryPercent));
+  const [aLevelGrades, setALevelGrades] = useState(academic.aLevelGrades ?? "");
   const [degreeTitle, setDegreeTitle] = useState(academic.degreeTitle);
   const [institution, setInstitution] = useState(academic.institution);
   const [graduationYear, setGraduationYear] = useState(text(academic.graduationYear));
@@ -192,24 +197,47 @@ export function ProfileReview({
   const notes = Object.values(extractions).map((reading) => reading.notes).filter(Boolean);
   const lowConfidence = Object.values(extractions).some((reading) => (reading.confidence ?? 100) < 70);
 
+  const schoolLeaver = qualification === "higher_secondary";
+  const cambridge = schoolSystem === "cambridge";
+  const secondaryValue = toNumber(secondaryPercent);
+  const higherSecondaryValue = cambridge ? null : toNumber(higherSecondaryPercent);
+  const aLevelValue = cambridge ? aLevelPercent(aLevelGrades) : null;
+  const schoolResult = schoolPercentFrom({
+    higherSecondaryPercent: higherSecondaryValue,
+    aLevelGrades: cambridge ? aLevelGrades : null,
+    secondaryPercent: secondaryValue,
+  });
+
   const save = async () => {
     setError("");
-    if (cgpaValue != null && scaleValue != null && cgpaValue > scaleValue) return setError("CGPA can’t be higher than its scale.");
-    if (!degreeTitle.trim()) return setError("Add the degree title.");
+    const outOfRange = [secondaryValue, higherSecondaryValue].some((value) => value != null && (value < 0 || value > 100));
+    if (outOfRange) return setError("School percentages must be between 0 and 100.");
+    if (schoolLeaver) {
+      if (schoolResult == null)
+        return setError(cambridge ? "Add the A level grades, for example A*AB." : "Add the FSc / intermediate percentage.");
+    } else {
+      if (cgpaValue != null && scaleValue != null && cgpaValue > scaleValue) return setError("CGPA can’t be higher than its scale.");
+      if (!degreeTitle.trim()) return setError("Add the degree title.");
+    }
     setSaving(true);
     try {
       await onSave({
-        degreeTitle,
+        highestQualification: qualification,
+        schoolSystem,
+        secondaryPercent: secondaryValue,
+        higherSecondaryPercent: higherSecondaryValue,
+        aLevelGrades: cambridge ? aLevelGrades : null,
+        degreeTitle: schoolLeaver ? degreeTitle || (cambridge ? "A levels" : "FSc / intermediate") : degreeTitle,
         institution,
         graduationYear: toNumber(graduationYear),
         yearsOfEducation: toNumber(years),
         cgpa: cgpaValue,
         cgpaScale: scaleValue,
-        totalCreditHours: toNumber(creditHours),
+        totalCreditHours: schoolLeaver ? null : toNumber(creditHours),
         englishTestType: englishType === "None" ? null : englishType,
         englishOverall: englishType === "None" ? null : toNumber(englishScore),
         mediumOfInstruction: moi,
-        credits: totals.map(([area, hours]) => ({
+        credits: (schoolLeaver ? [] : totals).map(([area, hours]) => ({
           area,
           creditHours: Math.round(hours * 10) / 10,
           ects: null,
@@ -318,7 +346,64 @@ export function ProfileReview({
                 </p>
               )}
             </div>
+            <div className="segmented qualification-switch" role="group" aria-label="Highest qualification">
+              {([
+                ["bachelor", "Bachelor’s degree"],
+                ["higher_secondary", "FSc / A levels (school)"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={qualification === value}
+                  className={qualification === value ? "active" : ""}
+                  onClick={() => {
+                    setQualification(value);
+                    if (value === "higher_secondary") setYears("12");
+                    else if (toNumber(years) === 12) setYears("16");
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="field-grid review-grid school-grid">
+              <label>
+                School system
+                <select value={schoolSystem} onChange={(e) => setSchoolSystem(e.target.value as typeof schoolSystem)}>
+                  <option value="pakistani_board">Pakistani board (Matric / FSc)</option>
+                  <option value="cambridge">Cambridge (O / A levels)</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>
+                {cambridge ? "O level percentage" : "Matric / SSC percentage"}
+                <input inputMode="decimal" value={secondaryPercent} onChange={(e) => setSecondaryPercent(e.target.value)} placeholder="e.g. 82" />
+              </label>
+              {cambridge ? (
+                <label>
+                  A level grades
+                  <input value={aLevelGrades} onChange={(e) => setALevelGrades(e.target.value)} placeholder="e.g. A*AB" />
+                  <small className="field-hint">{aLevelValue != null ? `≈ ${aLevelValue}% (IBCC equivalence)` : "One letter per subject"}</small>
+                </label>
+              ) : (
+                <label>
+                  FSc / intermediate percentage
+                  <input inputMode="decimal" value={higherSecondaryPercent} onChange={(e) => setHigherSecondaryPercent(e.target.value)} placeholder="e.g. 74" />
+                </label>
+              )}
+              {schoolResult != null && (
+                <p className={`school-verdict ${schoolResult >= SCHOOL_THRESHOLDS.exact ? "good" : schoolResult >= SCHOOL_THRESHOLDS.close ? "close" : "low"}`}>
+                  School result used for bachelor’s matching: <b>{schoolResult}%</b>
+                  {schoolResult >= SCHOOL_THRESHOLDS.exact
+                    ? " · strong applicant"
+                    : schoolResult >= SCHOOL_THRESHOLDS.close
+                      ? " · close (60–69%)"
+                      : " · below the 60% guide"}
+                </p>
+              )}
+            </div>
             <div className="field-grid review-grid">
+              {!schoolLeaver && (<>
               <label className={field("degreeTitle")}>Degree title<input value={degreeTitle} onChange={(e) => setDegreeTitle(e.target.value)} placeholder="BS Computer Science" /></label>
               <label className={field("institution")}>Institution<input value={institution} onChange={(e) => setInstitution(e.target.value)} /></label>
               <label className={field("graduationYear")}>Graduation year<input inputMode="numeric" value={graduationYear} onChange={(e) => setGraduationYear(e.target.value)} /></label>
@@ -333,6 +418,7 @@ export function ProfileReview({
               <label className={field("cgpa")}>CGPA<input inputMode="decimal" value={cgpa} onChange={(e) => setCgpa(e.target.value)} /></label>
               <label className={field("scale")}>CGPA scale (maximum)<input inputMode="decimal" value={scale} onChange={(e) => setScale(e.target.value)} /></label>
               <label className={field("creditHours")}>Total credit hours<input inputMode="decimal" value={creditHours} onChange={(e) => setCreditHours(e.target.value)} /></label>
+              </>)}
               <label className={field("englishType")}>
                 English test
                 <select value={englishType} onChange={(e) => setEnglishType(e.target.value)}>
@@ -342,11 +428,12 @@ export function ProfileReview({
               <label className={field("englishScore")}>English score<input inputMode="decimal" value={englishScore} disabled={englishType === "None"} onChange={(e) => setEnglishScore(e.target.value)} /></label>
               <label className={`review-check ${field("moi")}`}>
                 <input type="checkbox" checked={moi} onChange={(e) => setMoi(e.target.checked)} />
-                <span>Degree taught in English (medium-of-instruction letter available)</span>
+                <span>{schoolLeaver ? "Studied in English (medium-of-instruction letter available)" : "Degree taught in English (medium-of-instruction letter available)"}</span>
               </label>
             </div>
           </section>
 
+          {!schoolLeaver && (
           <section className="review-section">
             <div className="review-section-head">
               <h3>3. Map courses to subject areas</h3>
@@ -395,6 +482,7 @@ export function ProfileReview({
               <Plus size={14} /> Add course
             </button>
           </section>
+          )}
           {error && <p className="auth-message error" role="alert">{error}</p>}
         </div>
         <footer>

@@ -8,8 +8,7 @@ import {
   serializeRules,
   type Check,
   type Conversion,
-  type ProgrammeRules,
-} from "@/lib/matching/engine";
+  type ProgrammeRules, schoolPercentFrom, type HighestQualification} from "@/lib/matching/engine";
 import { latestProgrammeEditions } from "@/lib/matching/catalogue";
 
 export type Workspace = {
@@ -54,6 +53,11 @@ export type SubjectCredit = {
 
 /** The confirmed academic facts the eligibility engine reads. */
 export type AcademicFacts = {
+  highestQualification: HighestQualification;
+  schoolSystem: "pakistani_board" | "cambridge" | "other" | null;
+  secondaryPercent: number | null;
+  higherSecondaryPercent: number | null;
+  aLevelGrades: string | null;
   degreeTitle: string;
   institution: string;
   graduationYear: number | null;
@@ -112,6 +116,7 @@ export type Programme = {
   language: string;
   universityId: string | null;
   degreeLevel: string;
+  accessRestricted: boolean | null;
   applicationUrl: string;
   academicYear: string;
   officialCode: string;
@@ -134,6 +139,9 @@ export type University = {
   region: string;
   institutionType: "Statale" | "Non statale";
   isTelematic: boolean;
+  qsRank: number | null;
+  qsRankLabel: string | null;
+  qsRankYear: number | null;
   source: string;
   verifiedAt: string;
   conversion: Conversion;
@@ -150,6 +158,11 @@ export type MatchResult = {
   score: number;
   eligibilityScore: number;
   fitScore: number | null;
+  universityId: string | null;
+  degreeLevel: string;
+  accessRestricted: boolean | null;
+  /** Whether source points at the programme's own page or the university's general course list. */
+  sourceIsCourseList: boolean;
   fee: string;
   feeEur: number | null;
   deadline: string;
@@ -251,6 +264,8 @@ export type NewStudentInput = {
   degree: string;
   cgpa: number | null;
   cgpaScale: number;
+  highestQualification: HighestQualification;
+  higherSecondaryPercent: number | null;
   country: string;
   intake: string;
   budget: number | null;
@@ -420,6 +435,7 @@ function mapProgramme(row: Record<string, unknown>): Programme {
     universityId:
       typeof row.university_id === "string" ? row.university_id : null,
     degreeLevel: String(row.degree_level ?? "master"),
+    accessRestricted: typeof row.access_restricted === "boolean" ? row.access_restricted : null,
     applicationUrl: String(row.application_url ?? ""),
     academicYear: String(row.academic_year ?? ""),
     officialCode: String(row.official_programme_code ?? ""),
@@ -456,7 +472,13 @@ const numberOrNull = (value: unknown) =>
     : Number(value);
 
 function mapAcademic(academic: Record<string, unknown> | null): AcademicFacts {
+  const system = academic?.school_system;
   return {
+    highestQualification: academic?.highest_qualification === "higher_secondary" ? "higher_secondary" : "bachelor",
+    schoolSystem: system === "pakistani_board" || system === "cambridge" || system === "other" ? system : null,
+    secondaryPercent: numberOrNull(academic?.secondary_percent),
+    higherSecondaryPercent: numberOrNull(academic?.higher_secondary_percent),
+    aLevelGrades: typeof academic?.a_level_grades === "string" ? academic.a_level_grades : null,
     degreeTitle: String(academic?.degree_title ?? ""),
     institution: String(academic?.institution ?? ""),
     graduationYear: numberOrNull(academic?.graduation_year),
@@ -709,6 +731,11 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
             ? programme.annual_tuition_eur
             : null,
         ),
+        universityId: typeof programme.university_id === "string" ? programme.university_id : null,
+        degreeLevel: String(programme.degree_level ?? ""),
+        accessRestricted: typeof programme.access_restricted === "boolean" ? programme.access_restricted : null,
+        sourceIsCourseList:
+          Boolean(programme.catalogue_source_url) && programme.source_url === programme.catalogue_source_url,
         feeEur:
           typeof programme.annual_tuition_eur === "number"
             ? programme.annual_tuition_eur
@@ -923,7 +950,10 @@ export async function createStudent(
     .insert({
       student_id: student.id,
       workspace_id: workspaceId,
-      degree_level: "Bachelor's",
+      degree_level: input.highestQualification === "higher_secondary" ? "Higher secondary" : "Bachelor's",
+      highest_qualification: input.highestQualification,
+      higher_secondary_percent: input.higherSecondaryPercent,
+      years_of_education: input.highestQualification === "higher_secondary" ? 12 : null,
       degree_title: input.degree.trim() || null,
       cgpa: input.cgpa,
       cgpa_scale: input.cgpaScale,
@@ -1183,7 +1213,7 @@ export async function loadUniversities(): Promise<University[]> {
   const { data, error } = await createClient()
     .from("universities")
     .select(
-      "id, slug, name, region, institution_type, is_telematic, mur_source_url, directory_verified_at, ects_per_credit_hour, grade_pass_ratio",
+      "id, slug, name, region, institution_type, is_telematic, mur_source_url, directory_verified_at, ects_per_credit_hour, grade_pass_ratio, qs_rank, qs_rank_label, qs_rank_year",
     )
     .order("name");
   if (error) return [];
@@ -1195,6 +1225,9 @@ export async function loadUniversities(): Promise<University[]> {
     institutionType:
       row.institution_type === "Non statale" ? "Non statale" : "Statale",
     isTelematic: Boolean(row.is_telematic),
+    qsRank: numberOrNull(row.qs_rank),
+    qsRankLabel: typeof row.qs_rank_label === "string" ? row.qs_rank_label : null,
+    qsRankYear: numberOrNull(row.qs_rank_year),
     source: String(row.mur_source_url ?? ""),
     verifiedAt: String(row.directory_verified_at ?? ""),
     conversion: conversionFrom(row),
@@ -1266,6 +1299,8 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     degreeTitle: facts.degreeTitle,
     yearsOfEducation: facts.yearsOfEducation,
     totalCreditHours: facts.totalCreditHours,
+    highestQualification: facts.highestQualification,
+    schoolPercent: schoolPercentFrom(facts),
     cgpa: facts.cgpa,
     cgpaScale: facts.cgpaScale,
     englishTest:
@@ -1300,6 +1335,7 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
         programme.verification_status === "verified"
           ? 100
           : numberOrNull(programme.ai_confidence),
+      programmeLevel: String(programme.degree_level ?? ""),
     });
     return {
       workspace_id: workspaceId,
@@ -1330,12 +1366,25 @@ export async function runStudentMatch(workspaceId: string, studentId: string) {
     .upsert(rows, { onConflict: "student_id,programme_id" });
   if (matchError) throw matchError;
   // Results for programmes this run no longer checks (rules removed, or an older edition) are stale.
-  const { error: staleError } = await supabase
+  // The IDs go in the request URL, so compare in code and delete only the stale ones, in small
+  // batches: listing every checked programme in one filter makes the URL too long to accept.
+  const { data: existing, error: existingError } = await supabase
     .from("matches")
-    .delete()
-    .eq("student_id", studentId)
-    .not("programme_id", "in", `(${rows.map((row) => row.programme_id).join(",")})`);
-  if (staleError) throw staleError;
+    .select("programme_id")
+    .eq("student_id", studentId);
+  if (existingError) throw existingError;
+  const checked = new Set(rows.map((row) => String(row.programme_id)));
+  const stale = (existing ?? [])
+    .map((row) => String(row.programme_id))
+    .filter((programmeId) => !checked.has(programmeId));
+  for (let start = 0; start < stale.length; start += 100) {
+    const { error: staleError } = await supabase
+      .from("matches")
+      .delete()
+      .eq("student_id", studentId)
+      .in("programme_id", stale.slice(start, start + 100));
+    if (staleError) throw staleError;
+  }
   const { error: studentError } = await supabase
     .from("students")
     .update({ status: "shortlist_ready" })
@@ -1418,6 +1467,11 @@ export async function saveConfirmedProfile(
       {
         student_id: studentId,
         workspace_id: workspaceId,
+        highest_qualification: input.highestQualification,
+        school_system: input.schoolSystem,
+        secondary_percent: input.secondaryPercent,
+        higher_secondary_percent: input.higherSecondaryPercent,
+        a_level_grades: input.aLevelGrades?.trim() || null,
         degree_title: input.degreeTitle.trim() || null,
         institution: input.institution.trim() || null,
         graduation_year: input.graduationYear,

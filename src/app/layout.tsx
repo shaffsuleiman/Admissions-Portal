@@ -8,7 +8,7 @@ const display = Fraunces({ subsets: ["latin"], variable: "--font-display", axes:
 const script = Caveat({ subsets: ["latin"], variable: "--font-script", weight: ["500", "600"] });
 
 export const metadata: Metadata = {
-  title: "Eligify · Admissions OS",
+  title: "MatchED · From transcript to the right university",
   description: "Verified admissions matching and application management for education consultancies.",
 };
 

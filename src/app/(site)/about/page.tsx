@@ -7,19 +7,19 @@ import { PHOTOS } from "../content";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Why we built Eligify and the principles behind every match it makes.",
+  description: "Why we built MatchED and the principles behind every match it makes.",
 };
 
 const PRINCIPLES = [
   {
     icon: Link2,
     title: "Official sources first",
-    body: "Every programme in Eligify comes from the university's own website, and every match links back to it. We do not rely on rankings sites or second-hand lists.",
+    body: "Every programme in MatchED comes from the university's own website, and every match links back to it. We do not rely on rankings sites or second-hand lists.",
   },
   {
     icon: UserCheck,
     title: "A counsellor always confirms",
-    body: "Eligify reads documents and suggests matches, but a person on your team confirms the profile before anything is matched and checks the official page before advising.",
+    body: "MatchED reads documents and suggests matches, but a person on your team confirms the profile before anything is matched and checks the official page before advising.",
   },
   {
     icon: BookOpenCheck,
@@ -36,11 +36,11 @@ export default function AboutPage() {
           <div>
             <h1>Fair, checkable advice for every student going to Italy</h1>
             <p className="site-lede">
-              Eligify is admissions software for study-abroad consultancies. We started with Italy because its
+              MatchED is admissions software for study-abroad consultancies. We started with Italy because its
               English-taught programmes are excellent value and their entry rules are hard to compare.
             </p>
           </div>
-          <aside className="site-about-standard" aria-label="The Eligify standard">
+          <aside className="site-about-standard" aria-label="The MatchED standard">
             <div className="site-about-standard-head">
               <span><BadgeCheck size={18} /></span>
               <div><small>THE ELIGIFY STANDARD</small><strong>Every recommendation can be checked.</strong></div>
@@ -71,7 +71,7 @@ export default function AboutPage() {
             </p>
             <h2>What we built</h2>
             <p>
-              Eligify converts each student&apos;s credits using their own ratio of ECTS to credit hours, then checks
+              MatchED converts each student&apos;s credits using their own ratio of ECTS to credit hours, then checks
               them against the published entry rules in our programme catalogue. Every result says why it matched
               or nearly matched, and links to the official programme page so the counsellor can confirm it.
             </p>
@@ -102,10 +102,10 @@ export default function AboutPage() {
 
       <section className="site-section">
         <div className="site-shell site-narrow">
-          <h2>Who Eligify is for</h2>
+          <h2>Who MatchED is for</h2>
           <p>
             Consultancies of every size, from a single counsellor to networks with branches in several cities. If you
-            place students in Italian universities each September or February intake, Eligify is built for the way you
+            place students in Italian universities each September or February intake, MatchED is built for the way you
             work.
           </p>
           <div className="site-actions">

@@ -5,7 +5,7 @@ import { ContactForm } from "../EnquiryForms";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Questions about Eligify, pricing or your workspace. We reply within one working day.",
+  description: "Questions about MatchED, pricing or your workspace. We reply within one working day.",
 };
 
 export default function ContactPage() {
@@ -43,7 +43,7 @@ export default function ContactPage() {
               <CalendarDays size={18} />
               <h2>Prefer to talk?</h2>
               <p>
-                <Link href="/book">Book a consultation</Link> and we will walk you through Eligify with one of your own
+                <Link href="/book">Book a consultation</Link> and we will walk you through MatchED with one of your own
                 students.
               </p>
             </div>

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteBrand, SiteHeader } from "./SiteHeader";
+import { TAGLINE } from "./content";
 import "./site.css";
 
 export const metadata: Metadata = {
   title: {
-    template: "%s · Eligify",
-    default: "Eligify · Admissions matching for Italy",
+    template: "%s · MatchED",
+    default: "MatchED · From transcript to the right university",
   },
   description:
-    "Eligify helps study-abroad consultancies find the English-taught Italian programmes each student can get into, with every result linked to the official university page.",
+    "MatchED helps study-abroad consultancies find the English-taught Italian programmes each student can get into, with every result linked to the official university page.",
 };
 
 export default function SiteLayout({ children }: LayoutProps<"/">) {
@@ -23,10 +24,13 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
       <footer className="site-footer">
         <div className="site-shell site-footer-inner">
           <div className="site-footer-brand">
-            <Link href="/" aria-label="Eligify home">
+            <Link href="/" aria-label="MatchED home">
               <SiteBrand />
             </Link>
-            <p>Admissions matching for consultancies sending students to Italy.</p>
+            <p>
+              <strong className="site-tagline">{TAGLINE}</strong> Admissions matching for consultancies sending
+              students to Italy.
+            </p>
           </div>
           <div className="site-footer-links">
             <nav aria-label="Product">
@@ -44,7 +48,7 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
         <div className="site-shell site-footer-base">
-          <small>© {new Date().getFullYear()} Eligify</small>
+          <small>© {new Date().getFullYear()} MatchED</small>
           <small>University photos from Wikimedia Commons, credited on each page.</small>
         </div>
       </footer>

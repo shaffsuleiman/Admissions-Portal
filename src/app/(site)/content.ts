@@ -1,6 +1,9 @@
 // Copy and figures shared across the public pages. Update prices and catalogue
 // numbers here; every page reads from this file.
 
+/** The product line used in titles, the footer and sign-in. */
+export const TAGLINE = "From transcript to the right university.";
+
 export const CATALOGUE = {
   programmes: "730+",
   universities: "71",
@@ -27,7 +30,7 @@ export const PLANS: Plan[] = [
     name: "Trial",
     monthly: 0,
     yearly: 0,
-    blurb: "Try Eligify with real students before you commit.",
+    blurb: "Try MatchED with real students before you commit.",
     profiles: "10 student profiles",
     seats: "2 counsellors",
     features: [
@@ -113,7 +116,7 @@ export const PRICING_FAQ = [
   },
   {
     q: "Do you charge students or families?",
-    a: "No. Eligify is paid for by the consultancy. Families only see the shortlist reports you choose to share with them.",
+    a: "No. MatchED is paid for by the consultancy. Families only see the shortlist reports you choose to share with them.",
   },
   {
     q: "Which payment methods do you accept?",

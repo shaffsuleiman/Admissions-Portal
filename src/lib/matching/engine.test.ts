@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { degreeMatchesField, evaluate, studentEctsRatio, normalizeRules, serializeRules, toItalian110, type StudentFacts } from "./engine.ts";
+import { aLevelPercent, degreeMatchesField, evaluate, normalizeRules, schoolPercentFrom, serializeRules, studentEctsRatio, toItalian110, type StudentFacts } from "./engine.ts";
 
 const student = (overrides: Partial<StudentFacts> = {}): StudentFacts => ({
   yearsOfEducation: 16,
@@ -212,4 +212,34 @@ test("student-specific ECTS ratio from the HEC transcript (240 ÷ 133 = 1.80)", 
   assert.equal(flat.checks[0].outcome, "borderline");
   assert.equal(personal.checks[0].outcome, "pass");
   assert.match(personal.checks[0].detail, /10 cr × 1\.94 ECTS per credit hour/);
+});
+
+test("A level grades convert with IBCC equivalence", () => {
+  assert.equal(aLevelPercent("A*AB"), 83);
+  assert.equal(aLevelPercent("a*, a, a"), 87);
+  assert.equal(aLevelPercent(""), null);
+  assert.equal(schoolPercentFrom({ higherSecondaryPercent: null, aLevelGrades: "BBB", secondaryPercent: 90 }), 75);
+  assert.equal(schoolPercentFrom({ higherSecondaryPercent: 68, aLevelGrades: "A*A*A*" }), 68);
+});
+
+test("school-leavers are judged on school results for bachelor's programmes", () => {
+  const rules = normalizeRules({ min_years_of_education: 12, accepted_fields: ["Computer Science"] });
+  const leaver = (schoolPercent: number | null) =>
+    student({ highestQualification: "higher_secondary", schoolPercent, degreeTitle: "FSc Pre-Engineering", yearsOfEducation: 12, cgpa: null, cgpaScale: null });
+  const strong = evaluate(leaver(78), rules, { programmeLevel: "Bachelor" });
+  assert.equal(strong.result, "eligible");
+  assert.ok(!strong.checks.some((check) => check.label === "Degree field"));
+  assert.equal(evaluate(leaver(64), rules, { programmeLevel: "Bachelor" }).result, "borderline");
+  assert.equal(evaluate(leaver(55), rules, { programmeLevel: "Bachelor" }).result, "not_eligible");
+  assert.equal(evaluate(leaver(null), rules, { programmeLevel: "Bachelor" }).result, "borderline");
+});
+
+test("a master's programme still needs a degree from a school-leaver", () => {
+  const rules = normalizeRules({ min_years_of_education: 16 });
+  const result = evaluate(
+    student({ highestQualification: "higher_secondary", schoolPercent: 90, yearsOfEducation: 12 }),
+    rules,
+    { programmeLevel: "Master" },
+  );
+  assert.equal(result.result, "not_eligible");
 });

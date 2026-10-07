@@ -7,7 +7,7 @@ import { ConsultationForm } from "../EnquiryForms";
 
 export const metadata: Metadata = {
   title: "Book a consultation",
-  description: "A 30 minute call where we run one of your students through Eligify and answer your questions.",
+  description: "A 30 minute call where we run one of your students through MatchED and answer your questions.",
 };
 
 export default async function BookPage({ searchParams }: PageProps<"/book">) {
@@ -19,7 +19,7 @@ export default async function BookPage({ searchParams }: PageProps<"/book">) {
       <section className="site-page-head site-book-head">
         <div className="site-shell site-book-head-inner">
           <div>
-            <h1>See what Eligify changes for your team.</h1>
+            <h1>See what MatchED changes for your team.</h1>
             <p className="site-lede">
               Bring a real student profile and we will show you the complete journey from documents to a defensible shortlist.
             </p>
